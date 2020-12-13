@@ -1,15 +1,15 @@
 /**
- * @file main copy 2.c
+ * @file main.c
  * @author dma
- * @brief BMP图片批量转像素图
+ * @brief BMPͼƬ����ת����ͼ
  * @note
- * 编译命令：gcc main.c -O2 -g -o main.exe -Wall
- * 图片必须放在当前目录下的 img 目录中
- * 图片必须从 0000.bmp 开始命名直到结束，序号长度必须是4位，不足4位用0填充
- * 图片长宽必须一致，只支持24位位图（有的软件可能叫RGB24、24位真彩等）
- * 生成的bin文件在当前目录下的 out 目录中，名为 img.bin
- * 只要电脑内存够就能支持任意长宽，输出像素图的宽度(x)为BMP图片的宽度，高度(y)为BMP的高度按8对齐向上取整
- * 例如bmp图片长宽为 15 * 9，输出像素图的长宽为 15 * 16，这样做的目的是方便几乎所有的单色LCD、OLED屏幕显示
+ * �������gcc main.c -O2 -g -o main.exe -Wall
+ * ͼƬ������ڵ�ǰĿ¼�µ� img Ŀ¼��
+ * ͼƬ����� 0000.bmp ��ʼ����ֱ����������ų��ȱ�����4λ������4λ��0���
+ * ͼƬ��������һ�£�ֻ֧��24λλͼ����RGB888��24λ��ʵȣ�
+ * ���ɵ�bin�ļ��ڵ�ǰĿ¼�£���Ϊ img.bin
+ * ֻҪ�����ڴ湻����֧�����ⳤ�����������ͼ�Ŀ���(x)ΪBMPͼƬ�Ŀ��ȣ��߶�(y)ΪBMP�ĸ߶Ȱ�8��������ȡ��
+ * ����bmpͼƬ����Ϊ 15 * 9���������ͼ�ĳ���Ϊ 15 * 16����������Ŀ���Ƿ��㼸�����еĵ�ɫLCD��OLED��Ļ��ʾ
  * 
  * @version 0.1
  * @date 2020-12-07
@@ -24,60 +24,58 @@
 #include <string.h>
 #include <windows.h>
 
-//位图文件头
+//λͼ�ļ�ͷ
 typedef struct __attribute__((packed)) BMPFILEHEAD
 {
-	unsigned short bfType;//文件类型，必须是0x424D，也就是字符BM
-	unsigned int bfSize;//文件大小，包含头
-	unsigned short bfReserved1;//保留字
-	unsigned short bfReserved2;//保留字
-	unsigned int bfOffBits;//文件头到实际的图像数据的偏移字节数
+	unsigned short bfType;//�ļ����ͣ�������0x424D��Ҳ�����ַ�BM
+	unsigned int bfSize;//�ļ���С������ͷ
+	unsigned short bfReserved1;//������
+	unsigned short bfReserved2;//������
+	unsigned int bfOffBits;//�ļ�ͷ��ʵ�ʵ�ͼ�����ݵ�ƫ���ֽ���
 }BMPFILEHEAD;
 
-//位图信息头
+//λͼ��Ϣͷ
 typedef struct __attribute__((packed)) BMPINFOHEAD
 {
-	unsigned int biSize;//这个结构体的长度，为40字节
-	int biWidth;//图像的宽度
-	int biHeight;//图像的长度
-	unsigned short biPlanes;//必须是1
-	unsigned short biBitCount;//表示颜色时要用到的位数，常用的值为 1（黑白二色图）,4（16 色图）,8（256 色）,24（真彩色图）（新的.bmp 格式支持 32 位色，这里不做讨论）
-	unsigned int biCompression;//指定位图是否压缩，有效的值为 BI_RGB，BI_RLE8，BI_RLE4，BI_BITFIELDS（都是一些Windows定义好的常量，暂时只考虑BI_RGB不压缩的情况）
-	unsigned int biSizeImage;//指定实际的位图数据占用的字节数
-	int biXPelsPerMeter;//指定目标设备的水平分辨率
-	int biYPelsPerMeter;//指定目标设备的垂直分辨率
-	unsigned int biClrUsed;//指定本图象实际用到的颜色数，如果该值为零，则用到的颜色数为 2 的 biBitCount 次方
-	unsigned int biClrImportant;//指定本图象中重要的颜色数，如果该值为零，则认为所有的颜色都是重要的
+	unsigned int biSize;//����ṹ��ĳ��ȣ�Ϊ40�ֽ�
+	int biWidth;//ͼ��Ŀ���
+	int biHeight;//ͼ��ĳ���
+	unsigned short biPlanes;//������1
+	unsigned short biBitCount;//��ʾ��ɫʱҪ�õ���λ�������õ�ֵΪ 1���ڰ׶�ɫͼ��,4��16 ɫͼ��,8��256 ɫ��,24�����ɫͼ�����µ�.bmp ��ʽ֧�� 32 λɫ�����ﲻ�����ۣ�
+	unsigned int biCompression;//ָ��λͼ�Ƿ�ѹ������Ч��ֵΪ BI_RGB��BI_RLE8��BI_RLE4��BI_BITFIELDS������һЩWindows����õĳ�������ʱֻ����BI_RGB��ѹ���������
+	unsigned int biSizeImage;//ָ��ʵ�ʵ�λͼ����ռ�õ��ֽ���
+	int biXPelsPerMeter;//ָ��Ŀ���豸��ˮƽ�ֱ���
+	int biYPelsPerMeter;//ָ��Ŀ���豸�Ĵ�ֱ�ֱ���
+	unsigned int biClrUsed;//ָ����ͼ��ʵ���õ�����ɫ���������ֵΪ�㣬���õ�����ɫ��Ϊ 2 �� biBitCount �η�
+	unsigned int biClrImportant;//ָ����ͼ������Ҫ����ɫ���������ֵΪ�㣬����Ϊ���е���ɫ������Ҫ��
 }BMPINFOHEAD;
 
-//调色板
+//��ɫ��
 //typedef struct RGBQUAD
 //{
-//	unsigned char rgbBlue;//该颜色的蓝色分量
-//	unsigned char rgbGreen;//该颜色的绿色分量
-//	unsigned char rgbRed;//该颜色的红色分量
-//	unsigned char rgbReserved;//保留值
+//	unsigned char rgbBlue;//����ɫ����ɫ����
+//	unsigned char rgbGreen;//����ɫ����ɫ����
+//	unsigned char rgbRed;//����ɫ�ĺ�ɫ����
+//	unsigned char rgbReserved;//����ֵ
 //};
 
-//全局变量
+//ȫ�ֱ���
 FILE *rfp;
 FILE *wfp;
 BMPFILEHEAD BFH;
 BMPINFOHEAD BIH;
 
-unsigned int last_biSizeImage = 0;
-unsigned char *bmp_data = NULL;//彩色BMP文件数据指针
-unsigned char *gray_data = NULL;//彩色转灰度文件数据指针
-unsigned char *bit_data = NULL;//黑白图像文件数据指针
+unsigned char *bmp_data = NULL;//��ɫBMP�ļ�����ָ��
+unsigned char *bit_data = NULL;//�ڰ�ͼ���ļ�����ָ��
 uint32_t bit_data_size = 0;
 
-//函数
+//����
 int ReadBMPHead(FILE *fp);
 unsigned int ReadPoint(int x, int y);
 void DrawBITPoint(unsigned int x, unsigned int y);
 void CleanBITPoint(unsigned int x, unsigned int y);
 unsigned char ReadBITPoint(unsigned int x, unsigned int y);
-void BMP2BIT();//24色位图转黑白图
+void BMP2BIT();//24ɫλͼת�ڰ�ͼ
 
 
 int main(int argc, char *argv[])
@@ -102,13 +100,13 @@ int main(int argc, char *argv[])
 
 	bmp_data = (unsigned char *)malloc(BIH.biSizeImage);
 	
-	// 以图像高度为准，例如15*8像素的图片，需要15 * (8 / 8)字节内存，像素的图片需要15 * (9 / 8)向上取整 = 15 * 2字节内存
+	// ��ͼ��߶�Ϊ׼������15*8���ص�ͼƬ����Ҫ15 * (8 / 8)�ֽ��ڴ棬���ص�ͼƬ��Ҫ15 * (9 / 8)����ȡ�� = 15 * 2�ֽ��ڴ�
 	bit_data_size = BIH.biWidth * ((BIH.biHeight - 1) / 8 + 1);
 	bit_data = (unsigned char *)malloc(bit_data_size);
 
-	if((wfp = fopen(".\\out\\img.bin", "wb")) == NULL)
+	if((wfp = fopen(".\\img.bin", "wb")) == NULL)
 	{
-		printf("创建文件出错！\n");
+		printf("�����ļ�������\n");
 		system("pause");
 		return 0;
 	}
@@ -122,12 +120,12 @@ int main(int argc, char *argv[])
 
 		if((rfp = fopen(filename, "rb")) == NULL)
 		{
-			printf("\n打开文件 %s 出错或全部文件已处理完成\n", filename);
+			printf("\n���ļ� %s ������ȫ���ļ��Ѵ������\n", filename);
 			system("pause");
 			break;
 			//continue;
 		}
-		printf("\r正在处理文件： %s ", filename);
+		printf("\r���ڴ����ļ��� %s ", filename);
 		fflush(stdout);
 
 		fseek(rfp, BFH.bfOffBits, SEEK_SET);
@@ -154,17 +152,17 @@ int ReadBMPHead(FILE *fp)
 {
 	fseek(fp, 0, SEEK_SET);
 
-	fread(&BFH, sizeof(BFH), 1, fp); //读取BMP文件头
-	fread(&BIH, sizeof(BIH), 1, fp);//读取BMP信息头，40字节，直接用结构体读
+	fread(&BFH, sizeof(BFH), 1, fp); //��ȡBMP�ļ�ͷ
+	fread(&BIH, sizeof(BIH), 1, fp);//��ȡBMP��Ϣͷ��40�ֽڣ�ֱ���ýṹ���
 
-	printf("\nBMP文件头\n");
+	printf("\nBMP�ļ�ͷ\n");
 	printf("bfType = %x\n", BFH.bfType);
 	printf("bfSize = %d\n", BFH.bfSize);
 	printf("bfReserved1 = %d\n", BFH.bfReserved1);
 	printf("bfReserved2 = %d\n", BFH.bfReserved2);
 	printf("bfOffBits = %d\n", BFH.bfOffBits);
 
-	printf("\nBMP信息头\n");
+	printf("\nBMP��Ϣͷ\n");
 	printf("biSize = %d\n", BIH.biSize);
 	printf("biWidth = %d\n", BIH.biWidth);
 	printf("biHeight = %d\n", BIH.biHeight);
@@ -181,20 +179,20 @@ int ReadBMPHead(FILE *fp)
 //	if((BFH.bfType != 0x424D) || (BIH.biClrImportant != 0))
 	if((BFH.bfType != 0x4D42))
 	{
-		printf("\n不是BMP文件！\n");
+		printf("\n����BMP�ļ���\n");
 		return 1;
 	}
 
 	if (BIH.biBitCount != 24 || ((BIH.biClrImportant != 0) && (BIH.biClrImportant != 16777216)))
 	{
-		printf("\n不是24位BMP文件！\n");
+		printf("\n����24λBMP�ļ���\n");
 		return 2;
 	}
 
 	return 0;
 }
 
-//坐标从0开始计算
+//�����0��ʼ����
 unsigned int ReadPoint(int x, int y)
 {
 	unsigned int pos = 0;
@@ -204,19 +202,19 @@ unsigned int ReadPoint(int x, int y)
 
 	if (bmp_data == NULL)
 	{
-		printf("无图像数据\n");
+		printf("��ͼ������\n");
 		return 1;
 	}
 	
 	if (x >= BIH.biWidth || y >= BIH.biHeight)
 	{
-		//printf("读取的像素点超出图像范围\n");
+		//printf("��ȡ�����ص㳬��ͼ��Χ\n");
 		return 1;
 	}
 
 	//a=14,b=5
-	//普通取整a/b=2
-	//进一取整(a+b-1)/b=3
+	//��ͨȡ��a/b=2
+	//��һȡ��(a+b-1)/b=3
 
 	// (((width*biBitCount+7)/8+3)/4*4
 	// (((width*biBitCount)+31)/32)*4
@@ -235,32 +233,32 @@ unsigned int ReadPoint(int x, int y)
 
 inline void DrawBITPoint(unsigned int x, unsigned int y)
 {
-	//避免超出屏幕范围
+	//���ⳬ����Ļ��Χ
 	//if(x < BIH.biWidth && y < BIH.biHeight)
 	{
-		//bit_data[x + 128 * (y >> 3)] = bit_data[x + 128 * (y >> 3)] | (0x80 >> (y & 0x07));//MSB
-		bit_data[x + 128 * (y >> 3)] = bit_data[x + 128 * (y >> 3)] | (0x01 << (y & 0x07));//LSB
+		//bit_data[x + BIH.biWidth * (y >> 3)] = bit_data[x + BIH.biWidth * (y >> 3)] | (0x80 >> (y & 0x07));//MSB
+		bit_data[x + BIH.biWidth * (y >> 3)] = bit_data[x + BIH.biWidth * (y >> 3)] | (0x01 << (y & 0x07));//LSB
 	}
 }
 
 inline void CleanBITPoint(unsigned int x, unsigned int y)
 {
-	//避免超出屏幕范围
+	//���ⳬ����Ļ��Χ
 	//if(x < BIH.biWidth && y < BIH.biHeight)
 	{
-		//bit_data[x + 128 * (y >> 3)] = bit_data[x + 128 * (y >> 3)] & (~(0x80 >> (y & 0x07)));//MSB
-		bit_data[x + 128 * (y >> 3)] = bit_data[x + 128 * (y >> 3)] & (~(0x01 << (y & 0x07)));//LSB
+		//bit_data[x + BIH.biWidth * (y >> 3)] = bit_data[x + BIH.biWidth * (y >> 3)] & (~(0x80 >> (y & 0x07)));//MSB
+		bit_data[x + BIH.biWidth * (y >> 3)] = bit_data[x + BIH.biWidth * (y >> 3)] & (~(0x01 << (y & 0x07)));//LSB
 	}
 }
 
 inline unsigned char ReadBITPoint(unsigned int x, unsigned int y)
 {
-	//避免超出屏幕范围
+	//���ⳬ����Ļ��Χ
 	//if(x < BIH.biWidth && y < BIH.biHeight)
 	{
-		//读取像素
-		//if(bit_data[x + 128 * (y >> 3)] & (0x80 >> (y & 0x07)))//MSB
-		if(bit_data[x + 128 * (y >> 3)] & (0x01 << (y & 0x07)))//LSB
+		//��ȡ����
+		//if(bit_data[x + BIH.biWidth * (y >> 3)] & (0x80 >> (y & 0x07)))//MSB
+		if(bit_data[x + BIH.biWidth * (y >> 3)] & (0x01 << (y & 0x07)))//LSB
 		{
 			return 1;
 		}
@@ -268,7 +266,7 @@ inline unsigned char ReadBITPoint(unsigned int x, unsigned int y)
 	return 0;
 }
 
-//彩图转黑白
+//��ͼת�ڰ�
 void BMP2BIT()
 {
 	int x, y;
