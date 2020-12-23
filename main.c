@@ -3,13 +3,9 @@
  * @author dma
  * @brief BMP图片批量转像素图
  * @note
- * 编译命令：gcc main.c -O2 -g -o main.exe -Wall
- * 图片必须放在当前目录下的 img 目录中
- * 图片必须从 0000.bmp 开始命名直到结束，序号长度必须是4位，不足4位用0填充
- * 图片长宽必须一致，只支持24位位图（即RGB888、24位真彩等）
- * 生成的bin文件在当前目录下，名为 img.bin
- * 只要电脑内存够就能支持任意长宽，输出像素图的宽度(x)为BMP图片的宽度，高度(y)为BMP的高度按8对齐向上取整
- * 例如bmp图片长宽为 15 * 9，输出像素图的长宽为 15 * 16，这样做的目的是方便几乎所有的单色LCD、OLED屏幕显示
+ * TODO
+ * 支持设置输入、输出文件路径
+ * 支持C语言数组输出
  * 
  * @version 0.1
  * @date 2020-12-07
@@ -23,6 +19,8 @@
 #include <stdint.h>
 #include <string.h>
 #include <windows.h>
+
+#include "argparse.h"
 
 //位图文件头
 typedef struct __attribute__((packed)) BMPFILEHEAD
@@ -59,6 +57,7 @@ typedef struct __attribute__((packed)) BMPINFOHEAD
 //	unsigned char rgbReserved;//保留值
 //};
 
+
 //全局变量
 FILE *rfp;
 FILE *wfp;
@@ -69,6 +68,29 @@ unsigned char *bmp_data = NULL;//彩色BMP文件数据指针
 unsigned char *bit_data = NULL;//黑白图像文件数据指针
 uint32_t bit_data_size = 0;
 
+
+//设置
+int32_t invert_color = 0; // 反色
+int32_t luminance = 128; // 亮度
+
+
+//argparse
+struct argparse argparse;
+
+static const char *const usages[] = {
+	"main.exe [options]",
+	NULL,
+};
+
+struct argparse_option options[] = {
+	OPT_HELP(),
+	OPT_GROUP("Basic options"),
+	OPT_BOOLEAN('i', "invert", &invert_color, "invert color,  default FALSE", NULL, 0, 0),
+	OPT_INTEGER('l', "luminance", &luminance, "set luminance, default 128", NULL, 0, 0),
+	OPT_END(),
+};
+
+
 //函数
 int ReadBMPHead(FILE *fp);
 unsigned int ReadPoint(int x, int y);
@@ -78,11 +100,21 @@ unsigned char ReadBITPoint(unsigned int x, unsigned int y);
 void BMP2BIT();//24色位图转黑白图
 
 
-int main(int argc, char *argv[])
+int main(int argc, const char **argv)
 {
 	char filename[512];
 	int i;
 	int ret = 0;
+
+	argparse_init(&argparse, options, usages, 0);
+	argparse_parse(&argparse, argc, argv);
+
+	if(luminance < 0 || luminance > 255)
+	{
+		printf("luminance is out of range! \n");
+		return 0;
+	}
+	luminance *= 3; // 方便计算
 
 	rfp = fopen(".\\img\\0000.bmp", "rb");
 	if(rfp == NULL)
@@ -202,7 +234,7 @@ unsigned int ReadPoint(int x, int y)
 
 	if (bmp_data == NULL)
 	{
-		printf("无图像数据\n");
+		// printf("无图像数据\n");
 		return 1;
 	}
 	
@@ -278,13 +310,13 @@ void BMP2BIT()
 		for (x=0; x<BIH.biWidth; x++)
 		{
 			RGB = ReadPoint(x,y);
-			if (((RGB >> 16) & 0x0000FF) + ((RGB >> 8) & 0x0000FF) + (RGB & 0x0000FF) < 384)
+			if (((RGB >> 16) & 0x0000FF) + ((RGB >> 8) & 0x0000FF) + (RGB & 0x0000FF) < luminance)
 			{
-				DrawBITPoint(x, y);
+				invert_color ? CleanBITPoint(x, y) : DrawBITPoint(x, y);
 			}
 			else
 			{
-				CleanBITPoint(x, y);
+				invert_color ? DrawBITPoint(x, y) : CleanBITPoint(x, y);
 			}
 		}
 	}
