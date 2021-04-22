@@ -5,7 +5,7 @@
  * @note
  * TODO
  * 支持设置输入、输出文件路径
- * 支持C语言数组输出
+ * 支持RGB565格式输出
  * 
  * @version 0.1
  * @date 2020-12-07
@@ -61,6 +61,7 @@ typedef struct __attribute__((packed)) BMPINFOHEAD
 //全局变量
 FILE *rfp;
 FILE *wfp;
+FILE *bfp;
 BMPFILEHEAD BFH;
 BMPINFOHEAD BIH;
 
@@ -70,6 +71,7 @@ uint32_t bit_data_size = 0;
 
 
 //设置
+#define ELEMENT_PER_LINE 16
 int32_t invert_color = 0; // 反色
 int32_t luminance = 128; // 亮度
 
@@ -98,6 +100,10 @@ void DrawBITPoint(unsigned int x, unsigned int y);
 void CleanBITPoint(unsigned int x, unsigned int y);
 unsigned char ReadBITPoint(unsigned int x, unsigned int y);
 void BMP2BIT();//24色位图转黑白图
+
+void bin2array_start(FILE **fp, char *name);
+void bin2array_convert(FILE **fp, void *in, int in_len, int size);
+void bin2array_end(FILE **fp);
 
 
 int main(int argc, const char **argv)
@@ -144,6 +150,7 @@ int main(int argc, const char **argv)
 	}
 
 	printf("\n\n");
+	bin2array_start(&bfp, "img_data");
 	i = 0;
 	while (1)
 	{
@@ -166,11 +173,13 @@ int main(int argc, const char **argv)
 
 		BMP2BIT();
 		fwrite(bit_data, bit_data_size, 1, wfp);
-
+		
+		bin2array_convert(&bfp, (void *)bit_data, bit_data_size, sizeof(unsigned char));
 		i++;
 	}
 
 	fclose(wfp);
+	bin2array_end(&bfp);
 
 	free(bmp_data);
 	bmp_data = NULL;
@@ -320,4 +329,86 @@ void BMP2BIT()
 			}
 		}
 	}
+}
+
+// 二进制数据转C数组
+void bin2array_start(FILE **fp, char *name)
+{
+	*fp = fopen(".\\img.txt", "w");
+	if(*fp == NULL)
+	{
+		printf("open file \".\\img.txt\" error \n");
+		system("pause");
+		return;
+	}
+
+	fprintf(*fp, "unsigned char %s[] = {\n", name);
+}
+
+// in 输入数据数组
+// in_len 数组长度
+// size 数组元素大小
+void bin2array_convert(FILE **fp, void *in, int in_len, int size)
+{
+	int i = 0;
+	int rest = 0;
+	int count = 0;
+	int line = 0;
+	int line_count = 0;
+	char fmt_str1[16];
+	char fmt_str2[16];
+	unsigned char *ptr_u8 = (unsigned char *)in;
+	// unsigned short *ptr_u16 = (unsigned short *)in;
+	// unsigned int *ptr_u32 = (unsigned int *)in;
+
+	line_count = (in_len + ELEMENT_PER_LINE - 1) / ELEMENT_PER_LINE;
+
+	switch (size)
+	{
+	case 1:
+		strcpy(fmt_str1, "0x%02X, ");
+		strcpy(fmt_str2, "0x%02X,\n");
+		break;
+	// case 2:
+	// 	strcpy(fmt_str1, "0x%04X, ");
+	// 	strcpy(fmt_str2, "0x%04X,\n");
+	// 	break;
+	// case 4:
+	// 	strcpy(fmt_str1, "0x%08X, ");
+	// 	strcpy(fmt_str2, "0x%08X,\n");
+	// 	break;
+	
+	default:
+		printf("element size(%d) is invalid\n", size);
+		return;
+		// break;
+	}
+
+	count = 0;
+	for (line = 0; line < line_count; line++)
+	{
+		if (in_len - count < ELEMENT_PER_LINE)
+		{
+			rest = in_len % ELEMENT_PER_LINE - 1;
+		}
+		else
+		{
+			rest = ELEMENT_PER_LINE - 1;
+		}
+
+		fprintf(*fp, "    ");
+		for (i = 0; i < rest; i++)
+		{
+			fprintf(*fp, fmt_str1, ptr_u8[count]);
+			count += 1;
+		}
+		fprintf(*fp, fmt_str2, ptr_u8[count]);
+		count += 1;
+	}
+}
+
+void bin2array_end(FILE **fp)
+{
+	fprintf(*fp, "};\n");
+	fclose(*fp);
 }
