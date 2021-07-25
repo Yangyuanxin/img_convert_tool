@@ -286,6 +286,7 @@ int main(int argc, const char **argv)
         fclose(fpr);
 
         bmp_to_rgb888(bmp_data, rgb888_data, BIH.biWidth, BIH.biHeight);
+        memset(out_data, 0, out_data_size);
         aim_fmt->color_convert(rgb888_data, out_data, BIH.biWidth, BIH.biHeight);
 
         fwrite(out_data, 1, out_data_size, fpwb);
@@ -404,11 +405,11 @@ void bmp_to_rgb888(uint8_t *in, uint8_t *out, int h, int v)
     {
         for (j = 0; j < h; j++)
         {
-            offset = i * line_size + j * 3;
+            offset = (v - i - 1) * line_size + j * 3;
 
-            out[i * h + j * 3]     = in[offset + 2];
-            out[i * h + j * 3 + 1] = in[offset + 1];
-            out[i * h + j * 3 + 2] = in[offset];
+            out[i * h * 3 + j * 3]     = in[offset + 2];
+            out[i * h * 3 + j * 3 + 1] = in[offset + 1];
+            out[i * h * 3 + j * 3 + 2] = in[offset];
         }
     }
 }
@@ -440,7 +441,7 @@ void rgb888_to_bitmap(uint8_t *in, uint8_t *out, int h, int v)
     {
         for (x = 0; x < h; x++)
         {
-            avg = in[y * h + x] + in[y * h + x + 1] + in[y * h + x + 2];
+            avg = in[y * h * 3 + x * 3] + in[y * h * 3 + x * 3 + 1] + in[y * h * 3 + x * 3 + 2];
             if ((invert_color == 0 && avg < luminance) ||
                 (invert_color == 1 && avg > luminance))
             {
