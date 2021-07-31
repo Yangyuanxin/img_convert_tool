@@ -4,7 +4,7 @@
  * @brief BMP图片批量转像素图
  * @note
  * TODO
- * 支持设置输入、输出文件路径
+ * 参考 PCtoLCD2002 支持更多取模方式
  * 
  * @version 0.2
  * @date 2021-07-24
@@ -117,6 +117,8 @@ void bin2array_start(FILE **fp, char *name);
 void bin2array_convert(FILE **fp, void *in, int in_len, int size);
 void bin2array_end(FILE **fp);
 
+int convert(char *filename);
+void dbg_rgb888_dump_bmp(char *path, uint8_t *data, int32_t width, int32_t height);
 
 // 位图图像格式
 // v=vertical,h=horizontal,l=lsb,m=msb
@@ -156,9 +158,10 @@ const fmt_s *aim_fmt = NULL;
 // 设置
 #define ELEMENT_PER_LINE 16
 int32_t bitmap_mode = 0; // 反色
-int32_t invert_color = 0; // 反色
+int32_t reverse_color = 0; // 反色
 int32_t luminance = 128; // 亮度
 char *format_str = NULL;
+char *input_str = NULL;
 
 // argparse
 struct argparse argparse;
@@ -172,9 +175,10 @@ struct argparse_option options[] = {
     OPT_HELP(),
     OPT_GROUP("Basic options"),
     OPT_INTEGER('m', "mode", &bitmap_mode, "bitmap mode, 0=vertical-LSB, 1=vertical-MSB, 2=horizontal-LSB, 3=horizontal-MSB, default 0", NULL, 0, 0),
-    OPT_BOOLEAN('i', "invert", &invert_color, "invert color, only for bitmap,  default FALSE", NULL, 0, 0),
+    OPT_BOOLEAN('r', "reverse", &reverse_color, "reverse color, only for bitmap, default FALSE", NULL, 0, 0),
     OPT_INTEGER('l', "luminance", &luminance, "set luminance, only for bitmap, default 128", NULL, 0, 0),
     OPT_STRING('f', "format", &format_str, "set output format", NULL, 0, 0),
+    OPT_STRING('i', "input", &input_str, "set one input file", NULL, 0, 0),
     OPT_END(),
 };
 
@@ -215,10 +219,19 @@ int main(int argc, const char **argv)
         return 0;
     }
 
-    fpr = fopen(".\\img\\0000.bmp", "rb");
+	if (input_str == NULL)
+	{
+		strcpy(filename, ".\\img\\0000.bmp");
+	}
+	else
+	{
+		strcpy(filename, input_str);
+	}
+
+    fpr = fopen(filename, "rb");
     if(fpr == NULL)
     {
-        printf("open file \".\\img\\0000.bmp\" error \n");
+        printf("open file %s error \n", filename);
         return 0;
     }
     ret = bmp_read_head(fpr);
@@ -267,33 +280,27 @@ int main(int argc, const char **argv)
 
     printf("\n\n");
     bin2array_start(&fpwc, "img_data");
-    i = 0;
-    while (1)
-    {
-        memset(filename, 0, 512);
-        sprintf(filename, ".\\img\\%04d.bmp", i);
 
-        if((fpr = fopen(filename, "rb")) == NULL)
-        {
-            printf("\nopen %s error, or convert finish\n", filename);
-            break;
-        }
-        printf("\rconverting file %s ", filename);
-        fflush(stdout);
+	if (input_str == NULL)
+	{
+		i = 0;
+		while (1)
+		{
+			memset(filename, 0, 512);
+			sprintf(filename, ".\\img\\%04d.bmp", i);
+			if (convert(filename))
+			{
+				break;
+			}
+			i++;
+		}
+	}
+	else
+	{
+		strcpy(filename, input_str);
+		convert(filename);
+	}
 
-        fseek(fpr, BFH.bfOffBits, SEEK_SET);
-        fread(bmp_data, BIH.biSizeImage, 1, fpr);
-        fclose(fpr);
-
-        bmp_to_rgb888(bmp_data, rgb888_data, BIH.biWidth, BIH.biHeight);
-        memset(out_data, 0, out_data_size);
-        aim_fmt->color_convert(rgb888_data, out_data, BIH.biWidth, BIH.biHeight);
-
-        fwrite(out_data, 1, out_data_size, fpwb);
-        
-        bin2array_convert(&fpwc, (void *)out_data, out_data_size, sizeof(unsigned char));
-        i++;
-    }
     fclose(fpwb);
     bin2array_end(&fpwc);
 
@@ -305,6 +312,31 @@ int main(int argc, const char **argv)
     out_data = NULL;
 
     return 0;
+}
+
+int convert(char *filename)
+{
+	if((fpr = fopen(filename, "rb")) == NULL)
+	{
+		printf("\nopen %s error, or convert finish\n", filename);
+		return 1;
+	}
+	printf("\rconverting file %s ", filename);
+	fflush(stdout);
+
+	fseek(fpr, BFH.bfOffBits, SEEK_SET);
+	fread(bmp_data, BIH.biSizeImage, 1, fpr);
+	fclose(fpr);
+
+	bmp_to_rgb888(bmp_data, rgb888_data, BIH.biWidth, BIH.biHeight);
+	memset(out_data, 0, out_data_size);
+	aim_fmt->color_convert(rgb888_data, out_data, BIH.biWidth, BIH.biHeight);
+
+	fwrite(out_data, 1, out_data_size, fpwb);
+	
+	bin2array_convert(&fpwc, (void *)out_data, out_data_size, sizeof(unsigned char));
+
+	return 0;
 }
 
 int bmp_read_head(FILE *fp)
@@ -442,8 +474,8 @@ void rgb888_to_bitmap(uint8_t *in, uint8_t *out, int h, int v)
         for (x = 0; x < h; x++)
         {
             avg = in[y * h * 3 + x * 3] + in[y * h * 3 + x * 3 + 1] + in[y * h * 3 + x * 3 + 2];
-            if ((invert_color == 0 && avg < luminance) ||
-                (invert_color == 1 && avg > luminance))
+            if ((reverse_color == 0 && avg < luminance) ||
+                (reverse_color == 1 && avg > luminance))
             {
                 continue;
             }
@@ -594,4 +626,64 @@ void bin2array_end(FILE **fp)
 {
     fprintf(*fp, "};\n");
     fclose(*fp);
+}
+
+void dbg_rgb888_dump_bmp(char *path, uint8_t *data, int32_t width, int32_t height)
+{
+	BMP_FILE_HEAD bfh;
+    BMP_INFO_HEAD bih;
+	FILE *fp;
+	uint8_t line_buf[2048 * 3];
+	int32_t line_size;
+	int32_t i, j;
+
+	if (width > 2048)
+	{
+		printf("width larger than 2048\n");
+		return;
+	}
+
+	fp = fopen(path, "wb");
+    if(fp == NULL)
+    {
+        printf("dump file %s error \n", path);
+        return;
+    }
+
+	memset(&bfh, 0, sizeof(BMP_FILE_HEAD));
+	memset(&bih, 0, sizeof(BMP_INFO_HEAD));
+	memset(line_buf, 0, sizeof(line_buf));
+
+    line_size = ((width * 3 + 3) >> 2) << 2;
+
+	bfh.bfType = 0x4D42;
+	bfh.bfSize = 54 + line_size * height;
+	bfh.bfOffBits = 54;
+
+	bih.biSize = 40;
+	bih.biWidth = width;
+	bih.biHeight = height;
+	bih.biPlanes = 1;
+	bih.biBitCount = 24;
+	bih.biCompression = 0;
+	bih.biSizeImage = line_size * height;
+	bih.biXPelsPerMeter = 4724;
+	bih.biYPelsPerMeter = 4724;
+	bih.biClrUsed = 0;
+	bih.biClrImportant = 0;
+
+	fwrite(&bfh, sizeof(BMP_FILE_HEAD), 1, fp);
+	fwrite(&bih, sizeof(BMP_INFO_HEAD), 1, fp);
+	for(i = 0; i < height; i++)
+	{
+		for (j = 0; j < width; j++)
+        {
+			line_buf[j * 3] = data[(height - i - 1) * width * 3 + j * 3 + 2];
+			line_buf[j * 3 + 1] = data[(height - i - 1) * width * 3 + j * 3 + 1];
+			line_buf[j * 3 + 2] = data[(height - i - 1) * width * 3 + j * 3];
+        }
+		fwrite(line_buf, 1, line_size, fp);
+	}
+
+	fclose(fp);
 }
