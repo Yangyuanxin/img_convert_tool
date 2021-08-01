@@ -3,8 +3,6 @@
  * @author dma
  * @brief BMP图片批量转像素图
  * @note
- * TODO
- * 参考 PCtoLCD2002 支持更多取模方式
  * 
  * @version 0.2
  * @date 2021-07-24
@@ -18,6 +16,67 @@
 #include <stdint.h>
 #include <string.h>
 #include "argparse.h"
+
+#define SPECIFICATION \
+"\n" \
+"contvert bmp to other format\n" \
+"output fotmat: bitmap, rgb565\n" \
+"\n" \
+"==== format specification ====\n" \
+"\n" \
+"mode 1 = row by row, LSB\n" \
+"mode 2 = row by row, MSB\n" \
+"mode 3 = column by column, LSB\n" \
+"mode 4 = column by column, MSB\n" \
+"mode 5 = row column, LSB\n" \
+"mode 6 = row column, MSB\n" \
+"mode 7 = column row, LSB\n" \
+"mode 8 = column row, MSB\n" \
+"\n" \
+"data format in each mode (example 20*20 pixel img)\n" \
+"mode 1,2\n" \
+"Byte1    Byte2    Byte3\n" \
+"Byte4    Byte5    Byte6\n" \
+"Byte7    Byte8    Byte9\n" \
+"...\n" \
+"Byte58   Byte59   Byte60\n" \
+"\n" \
+"mode 3,4\n" \
+"Byte1    Byte4    Byte7  ...  Byte58\n" \
+"Byte2    Byte5    Byte8  ...  Byte59\n" \
+"Byte3    Byte6    Byte9  ...  Byte60\n" \
+"\n" \
+"mode 5,6\n" \
+"Byte1    Byte21    Byte41\n" \
+"Byte2    Byte22    Byte42\n" \
+"Byte3    Byte23    Byte43\n" \
+"...\n" \
+"Byte20   Byte40    Byte60\n" \
+"\n" \
+"mode 7,8\n" \
+"Byte1    Byte2    Byte3   ...  Byte20\n" \
+"Byte21   Byte22   Byte23  ...  Byte40\n" \
+"Byte41   Byte42   Byte43  ...  Byte60\n" \
+"\n" \
+"\n" \
+"coord in bit for LSB and MSB\n" \
+"\n" \
+"LSB mode 1,5\n" \
+"B7  B6  B5  B4  B3  B2  B1  B0\n" \
+"x+7 x+6 x+5 x+4 x+3 x+2 x+1 x+0\n" \
+"\n" \
+"LSB mode 3,7\n" \
+"B7  B6  B5  B4  B3  B2  B1  B0\n" \
+"y+7 y+6 y+5 y+4 y+3 y+2 y+1 y+0\n" \
+"\n" \
+"MSB mode 2,6\n" \
+"B7  B6  B5  B4  B3  B2  B1  B0\n" \
+"x+0 x+1 x+2 x+3 x+4 x+5 x+6 x+7\n" \
+"\n" \
+"MSB mode 4,8\n" \
+"B7  B6  B5  B4  B3  B2  B1  B0\n" \
+"y+0 y+1 y+2 y+3 y+4 y+5 y+6 y+7\n"
+
 
 // 位图文件头
 typedef struct __attribute__((packed)) BMP_FILE_HEAD
@@ -121,12 +180,16 @@ int convert(char *filename);
 void dbg_rgb888_dump_bmp(char *path, uint8_t *data, int32_t width, int32_t height);
 
 // 位图图像格式
-// v=vertical,h=horizontal,l=lsb,m=msb
+// r=row,c=column,l=lsb,m=msb
 typedef enum {
-    BITMAP_MODE_VL = 0,
-    BITMAP_MODE_VM = 1,
-    BITMAP_MODE_HL = 2,
-    BITMAP_MODE_HM = 3,
+    BITMAP_MODE_RL = 1,
+    BITMAP_MODE_RM = 2,
+    BITMAP_MODE_CL = 3,
+    BITMAP_MODE_CM = 4,
+    BITMAP_MODE_RCL = 5,
+    BITMAP_MODE_RCM = 6,
+    BITMAP_MODE_CRL = 7,
+    BITMAP_MODE_CRM = 8,
     BITMAP_MODE_INVALID,
 } bitmap_mode_e;
 
@@ -174,7 +237,7 @@ static const char *const usages[] = {
 struct argparse_option options[] = {
     OPT_HELP(),
     OPT_GROUP("Basic options"),
-    OPT_INTEGER('m', "mode", &bitmap_mode, "bitmap mode, 0=vertical-LSB, 1=vertical-MSB, 2=horizontal-LSB, 3=horizontal-MSB, default 0", NULL, 0, 0),
+    OPT_INTEGER('m', "mode", &bitmap_mode, "bitmap mode, 1 to 8, default 0", NULL, 0, 0),
     OPT_BOOLEAN('r', "reverse", &reverse_color, "reverse color, only for bitmap, default FALSE", NULL, 0, 0),
     OPT_INTEGER('l', "luminance", &luminance, "set luminance, only for bitmap, default 128", NULL, 0, 0),
     OPT_STRING('f', "format", &format_str, "set output format", NULL, 0, 0),
@@ -189,7 +252,7 @@ int main(int argc, const char **argv)
     int ret = 0;
 
     argparse_init(&argparse, options, usages, 0);
-    argparse_describe(&argparse, "\ncontvert bmp to other format", "\noutput fotmat: bitmap, rgb565\n");
+    argparse_describe(&argparse, NULL, SPECIFICATION);
     argparse_parse(&argparse, argc, argv);
 
     if (luminance < 0 || luminance > 255)
@@ -219,14 +282,14 @@ int main(int argc, const char **argv)
         return 0;
     }
 
-	if (input_str == NULL)
-	{
-		strcpy(filename, ".\\img\\0000.bmp");
-	}
-	else
-	{
-		strcpy(filename, input_str);
-	}
+    if (input_str == NULL)
+    {
+        strcpy(filename, ".\\img\\0000.bmp");
+    }
+    else
+    {
+        strcpy(filename, input_str);
+    }
 
     fpr = fopen(filename, "rb");
     if(fpr == NULL)
@@ -246,16 +309,20 @@ int main(int argc, const char **argv)
         // 宽度或高度需要向上对8取整，例如15*9像素的图片，横向需要(15 / 8) * 9 = 18字节内存，纵向需要 15 * (9 / 8) =30 字节内存
         switch (bitmap_mode)
         {
-            case BITMAP_MODE_VL:
-            case BITMAP_MODE_VM:
-                out_data_size = BIH.biWidth * ((BIH.biHeight + 7) >> 3);
-                break;
-            case BITMAP_MODE_HL:
-            case BITMAP_MODE_HM:
+            case BITMAP_MODE_RL:
+            case BITMAP_MODE_RM:
+            case BITMAP_MODE_RCL:
+            case BITMAP_MODE_RCM:
                 out_data_size = BIH.biHeight * ((BIH.biWidth + 7) >> 3);
                 break;
+            case BITMAP_MODE_CL:
+            case BITMAP_MODE_CM:
+            case BITMAP_MODE_CRL:
+            case BITMAP_MODE_CRM:
+                out_data_size = BIH.biWidth * ((BIH.biHeight + 7) >> 3);
+                break;
             default:
-                printf("known bitmap mode(%d)\n", bitmap_mode);
+                printf("error: unknown bitmap mode(%d)\n", bitmap_mode);
                 return 0;
                 break;
         }
@@ -281,25 +348,25 @@ int main(int argc, const char **argv)
     printf("\n\n");
     bin2array_start(&fpwc, "img_data");
 
-	if (input_str == NULL)
-	{
-		i = 0;
-		while (1)
-		{
-			memset(filename, 0, 512);
-			sprintf(filename, ".\\img\\%04d.bmp", i);
-			if (convert(filename))
-			{
-				break;
-			}
-			i++;
-		}
-	}
-	else
-	{
-		strcpy(filename, input_str);
-		convert(filename);
-	}
+    if (input_str == NULL)
+    {
+        i = 0;
+        while (1)
+        {
+            memset(filename, 0, 512);
+            sprintf(filename, ".\\img\\%04d.bmp", i);
+            if (convert(filename))
+            {
+                break;
+            }
+            i++;
+        }
+    }
+    else
+    {
+        strcpy(filename, input_str);
+        convert(filename);
+    }
 
     fclose(fpwb);
     bin2array_end(&fpwc);
@@ -316,27 +383,27 @@ int main(int argc, const char **argv)
 
 int convert(char *filename)
 {
-	if((fpr = fopen(filename, "rb")) == NULL)
-	{
-		printf("\nopen %s error, or convert finish\n", filename);
-		return 1;
-	}
-	printf("\rconverting file %s ", filename);
-	fflush(stdout);
+    if((fpr = fopen(filename, "rb")) == NULL)
+    {
+        printf("\nopen %s error, or convert finish\n", filename);
+        return 1;
+    }
+    printf("\rconverting file %s ", filename);
+    fflush(stdout);
 
-	fseek(fpr, BFH.bfOffBits, SEEK_SET);
-	fread(bmp_data, BIH.biSizeImage, 1, fpr);
-	fclose(fpr);
+    fseek(fpr, BFH.bfOffBits, SEEK_SET);
+    fread(bmp_data, BIH.biSizeImage, 1, fpr);
+    fclose(fpr);
 
-	bmp_to_rgb888(bmp_data, rgb888_data, BIH.biWidth, BIH.biHeight);
-	memset(out_data, 0, out_data_size);
-	aim_fmt->color_convert(rgb888_data, out_data, BIH.biWidth, BIH.biHeight);
+    bmp_to_rgb888(bmp_data, rgb888_data, BIH.biWidth, BIH.biHeight);
+    memset(out_data, 0, out_data_size);
+    aim_fmt->color_convert(rgb888_data, out_data, BIH.biWidth, BIH.biHeight);
 
-	fwrite(out_data, 1, out_data_size, fpwb);
-	
-	bin2array_convert(&fpwc, (void *)out_data, out_data_size, sizeof(unsigned char));
+    fwrite(out_data, 1, out_data_size, fpwb);
+    
+    bin2array_convert(&fpwc, (void *)out_data, out_data_size, sizeof(unsigned char));
 
-	return 0;
+    return 0;
 }
 
 int bmp_read_head(FILE *fp)
@@ -452,18 +519,23 @@ void rgb888_to_bitmap(uint8_t *in, uint8_t *out, int h, int v)
     int32_t avg = 0;
 
     int32_t he = 0;
-    // int32_t ve = 0;
+    int32_t ve = 0;
+
     switch (bitmap_mode)
     {
-        case BITMAP_MODE_VL:
-        case BITMAP_MODE_VM:
-            he = h;
-            // ve = (v + 7) >> 3;
-            break;
-        case BITMAP_MODE_HL:
-        case BITMAP_MODE_HM:
+        case BITMAP_MODE_RL:
+        case BITMAP_MODE_RM:
+        case BITMAP_MODE_RCL:
+        case BITMAP_MODE_RCM:
             he = (h + 7) >> 3;
-            // ve = v;
+            ve = v;
+            break;
+        case BITMAP_MODE_CL:
+        case BITMAP_MODE_CM:
+        case BITMAP_MODE_CRL:
+        case BITMAP_MODE_CRM:
+            he = h;
+            ve = (v + 7) >> 3;
             break;
         default:
             break;
@@ -482,17 +554,29 @@ void rgb888_to_bitmap(uint8_t *in, uint8_t *out, int h, int v)
 
             switch (bitmap_mode)
             {
-                case BITMAP_MODE_VL:
-                    out[x + h * (y >> 3)] = out[x + h * (y >> 3)] | (0x01 << (y & 0x07));
-                    break;
-                case BITMAP_MODE_VM:
-                    out[x + h * (y >> 3)] = out[x + h * (y >> 3)] | (0x80 >> (y & 0x07));
-                    break;
-                case BITMAP_MODE_HL:
+                case BITMAP_MODE_RL:
                     out[he * y + (x >> 3)] = out[he * y + (x >> 3)] | (0x01 << (x & 0x07));
                     break;
-                case BITMAP_MODE_HM:
+                case BITMAP_MODE_RM:
                     out[he * y + (x >> 3)] = out[he * y + (x >> 3)] | (0x80 >> (x & 0x07));
+                    break;
+                case BITMAP_MODE_CL:
+                    out[ve * x + (y >> 3)] = out[ve * x + (y >> 3)] | (0x01 << (y & 0x07));
+                    break;
+                case BITMAP_MODE_CM:
+                    out[ve * x + (y >> 3)] = out[ve * x + (y >> 3)] | (0x80 >> (y & 0x07));
+                    break;
+                case BITMAP_MODE_RCL:
+                     out[y + v * (x >> 3)] = out[y + v * (x >> 3)] | (0x01 << (x & 0x07));
+                    break;
+                case BITMAP_MODE_RCM:
+                    out[y + v * (x >> 3)] = out[y + v * (x >> 3)] | (0x80 >> (x & 0x07));
+                    break;
+                case BITMAP_MODE_CRL:
+                    out[x + h * (y >> 3)] = out[x + h * (y >> 3)] | (0x01 << (y & 0x07));
+                    break;
+                case BITMAP_MODE_CRM:
+                    out[x + h * (y >> 3)] = out[x + h * (y >> 3)] | (0x80 >> (y & 0x07));
                     break;
                 default:
                     break;
@@ -630,60 +714,60 @@ void bin2array_end(FILE **fp)
 
 void dbg_rgb888_dump_bmp(char *path, uint8_t *data, int32_t width, int32_t height)
 {
-	BMP_FILE_HEAD bfh;
+    BMP_FILE_HEAD bfh;
     BMP_INFO_HEAD bih;
-	FILE *fp;
-	uint8_t line_buf[2048 * 3];
-	int32_t line_size;
-	int32_t i, j;
+    FILE *fp;
+    uint8_t line_buf[2048 * 3];
+    int32_t line_size;
+    int32_t i, j;
 
-	if (width > 2048)
-	{
-		printf("width larger than 2048\n");
-		return;
-	}
+    if (width > 2048)
+    {
+        printf("width larger than 2048\n");
+        return;
+    }
 
-	fp = fopen(path, "wb");
+    fp = fopen(path, "wb");
     if(fp == NULL)
     {
         printf("dump file %s error \n", path);
         return;
     }
 
-	memset(&bfh, 0, sizeof(BMP_FILE_HEAD));
-	memset(&bih, 0, sizeof(BMP_INFO_HEAD));
-	memset(line_buf, 0, sizeof(line_buf));
+    memset(&bfh, 0, sizeof(BMP_FILE_HEAD));
+    memset(&bih, 0, sizeof(BMP_INFO_HEAD));
+    memset(line_buf, 0, sizeof(line_buf));
 
     line_size = ((width * 3 + 3) >> 2) << 2;
 
-	bfh.bfType = 0x4D42;
-	bfh.bfSize = 54 + line_size * height;
-	bfh.bfOffBits = 54;
+    bfh.bfType = 0x4D42;
+    bfh.bfSize = 54 + line_size * height;
+    bfh.bfOffBits = 54;
 
-	bih.biSize = 40;
-	bih.biWidth = width;
-	bih.biHeight = height;
-	bih.biPlanes = 1;
-	bih.biBitCount = 24;
-	bih.biCompression = 0;
-	bih.biSizeImage = line_size * height;
-	bih.biXPelsPerMeter = 4724;
-	bih.biYPelsPerMeter = 4724;
-	bih.biClrUsed = 0;
-	bih.biClrImportant = 0;
+    bih.biSize = 40;
+    bih.biWidth = width;
+    bih.biHeight = height;
+    bih.biPlanes = 1;
+    bih.biBitCount = 24;
+    bih.biCompression = 0;
+    bih.biSizeImage = line_size * height;
+    bih.biXPelsPerMeter = 4724;
+    bih.biYPelsPerMeter = 4724;
+    bih.biClrUsed = 0;
+    bih.biClrImportant = 0;
 
-	fwrite(&bfh, sizeof(BMP_FILE_HEAD), 1, fp);
-	fwrite(&bih, sizeof(BMP_INFO_HEAD), 1, fp);
-	for(i = 0; i < height; i++)
-	{
-		for (j = 0; j < width; j++)
+    fwrite(&bfh, sizeof(BMP_FILE_HEAD), 1, fp);
+    fwrite(&bih, sizeof(BMP_INFO_HEAD), 1, fp);
+    for(i = 0; i < height; i++)
+    {
+        for (j = 0; j < width; j++)
         {
-			line_buf[j * 3] = data[(height - i - 1) * width * 3 + j * 3 + 2];
-			line_buf[j * 3 + 1] = data[(height - i - 1) * width * 3 + j * 3 + 1];
-			line_buf[j * 3 + 2] = data[(height - i - 1) * width * 3 + j * 3];
+            line_buf[j * 3] = data[(height - i - 1) * width * 3 + j * 3 + 2];
+            line_buf[j * 3 + 1] = data[(height - i - 1) * width * 3 + j * 3 + 1];
+            line_buf[j * 3 + 2] = data[(height - i - 1) * width * 3 + j * 3];
         }
-		fwrite(line_buf, 1, line_size, fp);
-	}
+        fwrite(line_buf, 1, line_size, fp);
+    }
 
-	fclose(fp);
+    fclose(fp);
 }
