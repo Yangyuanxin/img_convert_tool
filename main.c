@@ -20,7 +20,6 @@
 #define SPECIFICATION \
 "\n" \
 "contvert bmp to other format\n" \
-"output fotmat: bitmap, rgb565\n" \
 "\n" \
 "==== format specification ====\n" \
 "\n" \
@@ -171,6 +170,7 @@ void rgb888_to_bitmap(uint8_t *in, uint8_t *out, int h, int v);
 void rgb888_to_web(uint8_t *in, uint8_t *out, int h, int v);
 void rgb888_to_rgb565(uint8_t *in, uint8_t *out, int h, int v);
 void rgb888_to_bgr565(uint8_t *in, uint8_t *out, int h, int v);
+void rgb888_to_argb1555(uint8_t *in, uint8_t *out, int h, int v);
 
 void bin2array_start(FILE **fp, char *name);
 void bin2array_convert(FILE **fp, void *in, int in_len, int size);
@@ -199,7 +199,7 @@ typedef enum {
     FMT_WEB    = 1,
     FMT_RGB565 = 2,
     FMT_BGR565 = 3,
-    // FMT_ARGB1555 = 0,
+    FMT_ARGB1555 = 4,
     FMT_INVALID,
 } fmt_e;
 
@@ -214,7 +214,7 @@ const fmt_s format_preset[] = {
     {FMT_WEB   , "web",    rgb888_to_web},
     {FMT_RGB565, "rgb565", rgb888_to_rgb565},
     {FMT_BGR565, "bgr565", rgb888_to_bgr565},
-    // {FMT_ARGB1555, "argb1555"},
+    {FMT_ARGB1555, "argb1555", rgb888_to_argb1555},
 };
 const fmt_s *aim_fmt = NULL;
 
@@ -223,6 +223,8 @@ const fmt_s *aim_fmt = NULL;
 int32_t bitmap_mode = 0; // 反色
 int32_t reverse_color = 0; // 反色
 int32_t luminance = 128; // 亮度
+uint32_t transparence = 0x12345678; // 透明色
+uint8_t tr = 0, tg = 0, tb = 0; // 透明色
 char *format_str = NULL;
 char *input_str = NULL;
 
@@ -240,7 +242,8 @@ struct argparse_option options[] = {
     OPT_INTEGER('m', "mode", &bitmap_mode, "bitmap mode, 1 to 8, default 0", NULL, 0, 0),
     OPT_BOOLEAN('r', "reverse", &reverse_color, "reverse color, only for bitmap, default FALSE", NULL, 0, 0),
     OPT_INTEGER('l', "luminance", &luminance, "set luminance, only for bitmap, default 128", NULL, 0, 0),
-    OPT_STRING('f', "format", &format_str, "set output format", NULL, 0, 0),
+    OPT_INTEGER('t', "transparence", &transparence, "set a color as transparent color, only for ARGB1555", NULL, 0, 0),
+    OPT_STRING('f', "format", &format_str, "set output format(bitmap, web, rgb565, bgr565, argb1555)", NULL, 0, 0),
     OPT_STRING('i', "input", &input_str, "set one input file", NULL, 0, 0),
     OPT_END(),
 };
@@ -334,6 +337,21 @@ int main(int argc, const char **argv)
     else if (aim_fmt->fmt == FMT_RGB565 || aim_fmt->fmt == FMT_BGR565)
     {
         out_data_size = BIH.biWidth * BIH.biHeight * 2;
+    }
+    else if (aim_fmt->fmt == FMT_ARGB1555)
+    {
+        out_data_size = BIH.biWidth * BIH.biHeight * 2;
+        if (transparence == 0x12345678)
+        {
+            printf("error: please set transparent color\n");
+            return 0;
+        }
+        else
+        {
+            tr = (transparence >> 16) & 0xFF;
+            tg = (transparence >> 8) & 0xFF;
+            tb = (transparence >> 0) & 0xFF;
+        }
     }
     out_data = (unsigned char *)malloc(out_data_size);
     bmp_data = (unsigned char *)malloc(BIH.biSizeImage);
@@ -589,7 +607,7 @@ void rgb888_to_web(uint8_t *in, uint8_t *out, int h, int v)
 {
     uint16_t *d        = (uint16_t *)out;
     const uint8_t *s   = in;
-    const uint8_t *end = s + h * v;
+    const uint8_t *end = s + h * v * 3;
 
     while (s < end) {
         uint8_t r = *s++;
@@ -606,7 +624,7 @@ void rgb888_to_rgb565(uint8_t *in, uint8_t *out, int h, int v)
 {
     uint16_t *d        = (uint16_t *)out;
     const uint8_t *s   = in;
-    const uint8_t *end = s + h * v;
+    const uint8_t *end = s + h * v * 3;
 
     while (s < end) {
         const int r = *s++;
@@ -620,13 +638,34 @@ void rgb888_to_bgr565(uint8_t *in, uint8_t *out, int h, int v)
 {
     uint16_t *d        = (uint16_t *)out;
     const uint8_t *s   = in;
-    const uint8_t *end = s + h * v;
+    const uint8_t *end = s + h * v * 3;
 
     while (s < end) {
         const int r = *s++;
         const int g = *s++;
         const int b = *s++;
         *d++        = (b >> 3) | ((g & 0xFC) << 3) | ((r & 0xF8) << 8);
+    }
+}
+
+void rgb888_to_argb1555(uint8_t *in, uint8_t *out, int h, int v)
+{
+    uint16_t *d        = (uint16_t *)out;
+    const uint8_t *s   = in;
+    const uint8_t *end = s + h * v * 3;
+
+    while (s < end) {
+        const int r = *s++;
+        const int g = *s++;
+        const int b = *s++;
+        if (r == tr && g == tg && b == tb)
+        {
+            *d++ = 0;
+        }
+        else
+        {
+            *d++ = (b >> 3) | ((g & 0xF8) << 2) | ((r & 0xF8) << 7) | 0x8000;
+        }
     }
 }
 
