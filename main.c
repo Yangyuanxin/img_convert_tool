@@ -178,6 +178,7 @@ void bin2array_end(FILE **fp);
 
 int convert(char *filename);
 void dbg_rgb888_dump_bmp(char *path, uint8_t *data, int32_t width, int32_t height);
+void dbg_rgb888_dump_ppm(char *path, uint8_t *data, int32_t width, int32_t height);
 
 // 位图图像格式
 // r=row,c=column,l=lsb,m=msb
@@ -414,6 +415,7 @@ int convert(char *filename)
     fclose(fpr);
 
     bmp_to_rgb888(bmp_data, rgb888_data, BIH.biWidth, BIH.biHeight);
+    // dbg_rgb888_dump_ppm("dump.ppm", rgb888_data, BIH.biWidth, BIH.biHeight);
     memset(out_data, 0, out_data_size);
     aim_fmt->color_convert(rgb888_data, out_data, BIH.biWidth, BIH.biHeight);
 
@@ -605,7 +607,7 @@ void rgb888_to_bitmap(uint8_t *in, uint8_t *out, int h, int v)
 
 void rgb888_to_web(uint8_t *in, uint8_t *out, int h, int v)
 {
-    uint16_t *d        = (uint16_t *)out;
+    uint8_t *d         = (uint8_t *)out;
     const uint8_t *s   = in;
     const uint8_t *end = s + h * v * 3;
 
@@ -613,9 +615,11 @@ void rgb888_to_web(uint8_t *in, uint8_t *out, int h, int v)
         uint8_t r = *s++;
         uint8_t g = *s++;
         uint8_t b = *s++;
+        // 0,26,77,128,179,229,255 量化在黑色、白色的效果略好
+        // 0,42,85,128,170,213,255 量化最简单直观
         r = r > 229 ? 5 : (r + 26) / 51;
-        g = r > 229 ? 5 : (g + 26) / 51;
-        b = r > 229 ? 5 : (b + 26) / 51;
+        g = g > 229 ? 5 : (g + 26) / 51;
+        b = b > 229 ? 5 : (b + 26) / 51;
         *d++ = r * 36 + g * 6 + b;
     }
 }
@@ -807,6 +811,29 @@ void dbg_rgb888_dump_bmp(char *path, uint8_t *data, int32_t width, int32_t heigh
         }
         fwrite(line_buf, 1, line_size, fp);
     }
+
+    fclose(fp);
+}
+
+void dbg_rgb888_dump_ppm(char *path, uint8_t *data, int32_t width, int32_t height)
+{
+    FILE *fp;
+    char ppm_head[128];
+    int32_t ppm_head_len;
+
+    fp = fopen(path, "wb");
+    if(fp == NULL)
+    {
+        printf("dump file %s error \n", path);
+        return;
+    }
+
+    memset(ppm_head, 0, sizeof(ppm_head));
+    sprintf(ppm_head, "P6 %d %d 255 ", width, height);
+    ppm_head_len = strlen(ppm_head);
+    fwrite(ppm_head, 1, ppm_head_len, fp);
+
+    fwrite(data, 1, height * width * 3, fp);
 
     fclose(fp);
 }
