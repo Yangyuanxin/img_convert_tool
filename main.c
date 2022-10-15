@@ -4,8 +4,8 @@
  * @brief BMP图片批量转像素图
  * @note
  * 
- * @version 0.2
- * @date 2021-07-24
+ * @version 0.3
+ * @date 2022-10-15
  * 
  * @copyright Copyright (c) 2021
  * 
@@ -171,6 +171,7 @@ void rgb888_to_web(uint8_t *in, uint8_t *out, int h, int v);
 void rgb888_to_rgb565(uint8_t *in, uint8_t *out, int h, int v);
 void rgb888_to_bgr565(uint8_t *in, uint8_t *out, int h, int v);
 void rgb888_to_argb1555(uint8_t *in, uint8_t *out, int h, int v);
+void rgb888_to_bgra5551(uint8_t *in, uint8_t *out, int h, int v);
 
 void bin2array_start(FILE **fp, char *name);
 void bin2array_convert(FILE **fp, void *in, int in_len, int size);
@@ -201,6 +202,7 @@ typedef enum {
     FMT_RGB565 = 2,
     FMT_BGR565 = 3,
     FMT_ARGB1555 = 4,
+    FMT_BGRA5551 = 5,
     FMT_INVALID,
 } fmt_e;
 
@@ -216,6 +218,7 @@ const fmt_s format_preset[] = {
     {FMT_RGB565, "rgb565", rgb888_to_rgb565},
     {FMT_BGR565, "bgr565", rgb888_to_bgr565},
     {FMT_ARGB1555, "argb1555", rgb888_to_argb1555},
+    {FMT_BGRA5551, "bgra5551", rgb888_to_bgra5551},
 };
 const fmt_s *aim_fmt = NULL;
 
@@ -223,6 +226,7 @@ const fmt_s *aim_fmt = NULL;
 #define ELEMENT_PER_LINE 16
 int32_t bitmap_mode = 0; // 反色
 int32_t reverse_color = 0; // 反色
+int32_t big_endian = 0; // 大端
 int32_t luminance = 128; // 亮度
 uint32_t transparence = 0x12345678; // 透明色
 uint8_t tr = 0, tg = 0, tb = 0; // 透明色
@@ -242,9 +246,10 @@ struct argparse_option options[] = {
     OPT_GROUP("Basic options"),
     OPT_INTEGER('m', "mode", &bitmap_mode, "bitmap mode, 1 to 8, default 0", NULL, 0, 0),
     OPT_BOOLEAN('r', "reverse", &reverse_color, "reverse color, only for bitmap, default FALSE", NULL, 0, 0),
+    OPT_BOOLEAN('b', "bigendian", &big_endian, "big_endian, only for 16bit format, e.g. rgb565, argb565, default FALSE", NULL, 0, 0),
     OPT_INTEGER('l', "luminance", &luminance, "set luminance, only for bitmap, default 128", NULL, 0, 0),
-    OPT_INTEGER('t', "transparence", &transparence, "set a color as transparent color, only for ARGB1555", NULL, 0, 0),
-    OPT_STRING('f', "format", &format_str, "set output format(bitmap, web, rgb565, bgr565, argb1555)", NULL, 0, 0),
+    OPT_INTEGER('t', "transparence", &transparence, "set a color as transparent color, only for argb1555 and bgra5551", NULL, 0, 0),
+    OPT_STRING('f', "format", &format_str, "set output format(bitmap, web, rgb565, bgr565, argb1555, bgra5551)", NULL, 0, 0),
     OPT_STRING('i', "input", &input_str, "set one input file", NULL, 0, 0),
     OPT_END(),
 };
@@ -339,7 +344,7 @@ int main(int argc, const char **argv)
     {
         out_data_size = BIH.biWidth * BIH.biHeight * 2;
     }
-    else if (aim_fmt->fmt == FMT_ARGB1555)
+    else if (aim_fmt->fmt == FMT_ARGB1555 || aim_fmt->fmt == FMT_BGRA5551)
     {
         out_data_size = BIH.biWidth * BIH.biHeight * 2;
         if (transparence == 0x12345678)
@@ -418,6 +423,20 @@ int convert(char *filename)
     // dbg_rgb888_dump_ppm("dump.ppm", rgb888_data, BIH.biWidth, BIH.biHeight);
     memset(out_data, 0, out_data_size);
     aim_fmt->color_convert(rgb888_data, out_data, BIH.biWidth, BIH.biHeight);
+
+    if (big_endian &&
+        (aim_fmt->fmt == FMT_RGB565   ||
+         aim_fmt->fmt == FMT_BGR565   ||
+         aim_fmt->fmt == FMT_ARGB1555 ||
+         aim_fmt->fmt == FMT_BGRA5551 ) )
+    {
+        uint16_t *d        = (uint16_t *)out_data;
+        const uint16_t *end = d + BIH.biWidth * BIH.biHeight * 2;
+        while (d < end) {
+            *d = ((*d & 0x00FF) << 8) | ((*d & 0xFF00) >> 8);
+            d++;
+        }
+    }
 
     fwrite(out_data, 1, out_data_size, fpwb);
     
@@ -648,7 +667,7 @@ void rgb888_to_bgr565(uint8_t *in, uint8_t *out, int h, int v)
         const int r = *s++;
         const int g = *s++;
         const int b = *s++;
-        *d++        = (b >> 3) | ((g & 0xFC) << 3) | ((r & 0xF8) << 8);
+        *d++        = ((b & 0xF8) << 8) | ((g & 0xFC) << 3) | (r >> 3);
     }
 }
 
@@ -669,6 +688,27 @@ void rgb888_to_argb1555(uint8_t *in, uint8_t *out, int h, int v)
         else
         {
             *d++ = (b >> 3) | ((g & 0xF8) << 2) | ((r & 0xF8) << 7) | 0x8000;
+        }
+    }
+}
+
+void rgb888_to_bgra5551(uint8_t *in, uint8_t *out, int h, int v)
+{
+    uint16_t *d        = (uint16_t *)out;
+    const uint8_t *s   = in;
+    const uint8_t *end = s + h * v * 3;
+
+    while (s < end) {
+        const int r = *s++;
+        const int g = *s++;
+        const int b = *s++;
+        if (r == tr && g == tg && b == tb)
+        {
+            *d++ = 0;
+        }
+        else
+        {
+            *d++ = ((b & 0xF8) << 8) | ((g & 0xF8) << 3) | (r >> 2) | 0x0001;
         }
     }
 }
