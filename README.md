@@ -1,8 +1,26 @@
 # BMP转像素图
 将标准24位色BMP图片转为LCD、OLED等屏使用的像素图，支持多种输出格式，可批量转换，方便制作bad apple、开机logo等动画
 
+# 使用方法
+
+## 图像编码
+编码功能目前为命令行方式
+1. 编译`img_enc.exe`
+2. 使用命令行方式运行`img_enc.exe`
+3. 详细参数见下文
+   
+## 图像解码
+解码功能带有一个基于tkinter的GUI界面，方便预览和保存解码后的图像。
+导出的图像格式为ppm，可使用PS、Honeyview等软件查看
+1. 编译`img_dec.dll`
+2. 使用python 打开 img_dec_gui.pyw
+
 # 编译命令
-`gcc main.c argparse.c -o main.exe -Wall -O2 -g`
+## 命令行编译
+编码功能
+`gcc main.c argparse.c -o img_enc.exe -Wall -O2 -g`
+解码功能
+`gcc -shared -o img_dec.dll .\img_common.c .\img_dec.c`
 
 # 参数设置
 * -i 转换指定单个文件，不设置则批量转换 ./img/ 目录下的文件

@@ -468,7 +468,7 @@ static void bitmap_crm_to_rgb888(uint8_t *in, uint8_t *out, int32_t h, int32_t v
     }
 }
 
-static void web_to_rgb888(uint8_t *in, uint8_t *out, int h, int v)
+static void web_to_rgb888(uint8_t *in, uint8_t *out, int32_t h, int32_t v)
 {
     uint8_t *d          = out;
     const uint8_t *s   = (const uint8_t *)in;
@@ -482,7 +482,7 @@ static void web_to_rgb888(uint8_t *in, uint8_t *out, int h, int v)
     }
 }
 
-static void rgb565_to_rgb888(uint8_t *in, uint8_t *out, int h, int v)
+static void rgb565_to_rgb888(uint8_t *in, uint8_t *out, int32_t h, int32_t v)
 {
     uint8_t *d          = out;
     const uint16_t *s   = (const uint16_t *)in;
@@ -500,7 +500,7 @@ static void rgb565_to_rgb888(uint8_t *in, uint8_t *out, int h, int v)
     }
 }
 
-static void bgr565_to_rgb888(uint8_t *in, uint8_t *out, int h, int v)
+static void bgr565_to_rgb888(uint8_t *in, uint8_t *out, int32_t h, int32_t v)
 {
     uint8_t *d          = out;
     const uint16_t *s   = (const uint16_t *)in;
@@ -518,7 +518,7 @@ static void bgr565_to_rgb888(uint8_t *in, uint8_t *out, int h, int v)
     }
 }
 
-static void argb1555_to_rgb888(uint8_t *in, uint8_t *out, int h, int v)
+static void argb1555_to_rgb888(uint8_t *in, uint8_t *out, int32_t h, int32_t v)
 {
     uint8_t *d          = out;
     const uint16_t *s   = (const uint16_t *)in;

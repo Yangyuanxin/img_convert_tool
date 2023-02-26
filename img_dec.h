@@ -29,9 +29,9 @@ typedef enum {
 typedef struct
 {
     fmt_e format; // 图像格式
-    int32_t is_big_endian; // 是否为大端格式，仅对rgb565等16位图像有效
-    int32_t height; // 图片垂直方向长度
     int32_t width; // 图片水平方向长度
+    int32_t height; // 图片垂直方向长度
+    int32_t is_big_endian; // 是否为大端格式，仅对rgb565等16位图像有效
     int32_t file_offset; // 文件开头的偏移量
     int32_t img_head_size; // 单个图片的头部大小
     int32_t img_tail_size; // 单个图片的尾部大小
