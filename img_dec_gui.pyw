@@ -175,9 +175,9 @@ def open_file():
     inputfile = create_string_buffer(file_path.encode("gbk"))
     img_dec_ptr = img_dec_dll.img_dec_open(inputfile)
     if (bool(img_dec_ptr)):
-        lb_status_content.config(text="无法打开")
-    else:
         lb_status_content.config(text="打开完成")
+    else:
+        lb_status_content.config(text="无法打开")
 
 def close_file():
     global img_dec_ptr
@@ -439,7 +439,7 @@ lb_status_content.grid(row=1, column=5, columnspan=2, padx=G_GRID_PADX, pady=G_G
 
 
 frame_img_src = tk.Frame(window)
-frame_img_src.pack(anchor=tk.W, fill=tk.BOTH)
+frame_img_src.pack(anchor=tk.W, fill=tk.BOTH, expand=True)
 
 # canvas_src = tk.Canvas(frame_img_src, width = 600, height = 100)
 canvas_src = tk.Canvas(frame_img_src)
@@ -466,8 +466,6 @@ def main():
     if (bool(img_dec_ptr)):
         img_dec_dll.img_dec_close(img_dec_ptr)
         img_dec_ptr = None
-
-    print("end")
 
 # ---------------- 程序入口 ----------------
 if (__name__ == "__main__"):
