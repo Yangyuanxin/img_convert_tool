@@ -13,6 +13,9 @@ typedef enum {
     IMG_FILE_TAIL,
     IMG_SEEK_ERR,
     IMG_MEM_WRONG,
+    IMG_FORMAT_ERR,
+    IMG_FORMAT_UNKNOWN,
+    IMG_FORMAT_NOT_SUPPORT,
     IMG_OTHER_ERR,
 } img_err_code;
 
