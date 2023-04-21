@@ -37,7 +37,7 @@ static void rgb888_to_bgr565(uint8_t *in, uint8_t *out, int32_t h, int32_t v);
 static void rgb888_to_argb1555(uint8_t *in, uint8_t *out, int32_t h, int32_t v, uint32_t transparence);
 static void rgb888_to_bgra5551(uint8_t *in, uint8_t *out, int32_t h, int32_t v, uint32_t transparence);
 
-const convert convert_list[] = {
+static const convert convert_list[] = {
     NULL,
     rgb888_to_bitmap_rl,
     rgb888_to_bitmap_rm,
@@ -74,7 +74,10 @@ typedef struct
 
 typedef struct
 {
-    int32_t img_size; // 单张图片的大小
+    uint32_t width; // 最终输出图片的宽度（预览图和它保持一致）
+    uint32_t height; // 最终输出图片的宽度（预览图和它保持一致）
+    int32_t img_size; // 最终输出图片的大小
+    int32_t img_size_preview; // 预览图片的大小
     _img_buf in_buf; // 输入的图片原始数据，后续处理步骤不要修改这里的数据
     _img_buf effect_buf_prev; // 保存处理前的图片数据，每一步处理完成后，这两者互相调换
     _img_buf effect_buf_next; // 保存处理后的图片数据，每一步处理完成后，这两者互相调换
@@ -254,6 +257,36 @@ static img_err_code load_bmp_data(FILE *fp, BMP_HEAD *bh, _img_buf *img)
 
     SAFE_FREE(bmp_data);
     return IMG_OK;
+}
+
+// rgb888转为以rgb888格式保存的web颜色，仅预览使用
+static void rgb8882rgb888_web(uint8_t *in, int32_t h, int32_t v)
+{
+    static uint8_t color_table[6] = {0x00, 0x33, 0x66, 0x99, 0xcc, 0xff};
+    int32_t i = 0;
+    int32_t color_id = 0;
+    uint8_t color = 0;
+
+    for (i = 0; i < h * v * 3; i++)
+    {
+        // 0,26,77,128,179,229,255 量化相对而言效果略好
+        // 0,42,85,128,170,213,255 量化最简单直接
+        color = in[i];
+        color_id = color > 229 ? 5 : (color + 26) / 51;
+        in[i] = color_table[color_id];
+    }
+    return;
+}
+
+// rgb888转为以rgb888格式保存的rgb555颜色，仅预览使用（这里偷懒，rgb565按rgb555处理）
+static void rgb8882rgb888_rgb555(uint8_t *in, int32_t h, int32_t v)
+{
+    int32_t i = 0;
+    for (i = 0; i < h * v * 3; i++)
+    {
+        in[i] = in[i] & 0xF8;
+    }
+    return;
 }
 
 static void rgb8882gray(uint8_t *in, uint8_t *out, int32_t h, int32_t v)
@@ -446,6 +479,7 @@ static void dither_color_space_web(pixel_rgb888 *in, pixel_rgb888 *out, pixel_rg
     return;
 }
 
+// 颜色抖动算法都按照RGB555处理，对于RGB565到RGB555的G通道色彩损失相当于用抖动算法弥补
 static void dither_color_space_rgb555(pixel_rgb888 *in, pixel_rgb888 *out, pixel_rgb_err *err)
 {
     int32_t i = 0;
@@ -617,6 +651,8 @@ static img_err_code img_enc_effect(img_enc_ctx *img)
         // rgb转灰度
         rgb8882gray(ctx->effect_buf_prev.buf, ctx->effect_buf_next.buf, ctx->effect_buf_prev.width, ctx->effect_buf_prev.height);
         ctx->effect_buf_next.color = COLOR_GRAY_8;
+        ctx->effect_buf_next.width = ctx->effect_buf_prev.width;
+        ctx->effect_buf_next.height = ctx->effect_buf_prev.height;
         img_buf_tmp = ctx->effect_buf_prev;
         ctx->effect_buf_prev = ctx->effect_buf_next;
         ctx->effect_buf_next = img_buf_tmp;
@@ -625,6 +661,8 @@ static img_err_code img_enc_effect(img_enc_ctx *img)
         gray_luminance(ctx->effect_buf_prev.buf, ctx->effect_buf_next.buf, ctx->effect_buf_prev.width, ctx->effect_buf_prev.height,
                        ctx->param.luminance, ctx->param.contrast);
         ctx->effect_buf_next.color = COLOR_GRAY_8;
+        ctx->effect_buf_next.width = ctx->effect_buf_prev.width;
+        ctx->effect_buf_next.height = ctx->effect_buf_prev.height;
         img_buf_tmp = ctx->effect_buf_prev;
         ctx->effect_buf_prev = ctx->effect_buf_next;
         ctx->effect_buf_next = img_buf_tmp;
@@ -638,6 +676,8 @@ static img_err_code img_enc_effect(img_enc_ctx *img)
                 return err_code;
             }
             ctx->effect_buf_next.color = COLOR_GRAY_8;
+            ctx->effect_buf_next.width = ctx->effect_buf_prev.width;
+            ctx->effect_buf_next.height = ctx->effect_buf_prev.height;
             img_buf_tmp = ctx->effect_buf_prev;
             ctx->effect_buf_prev = ctx->effect_buf_next;
             ctx->effect_buf_next = img_buf_tmp;
@@ -652,6 +692,8 @@ static img_err_code img_enc_effect(img_enc_ctx *img)
                 return err_code;
             }
             ctx->effect_buf_next.color = COLOR_GRAY_8;
+            ctx->effect_buf_next.width = ctx->effect_buf_prev.width;
+            ctx->effect_buf_next.height = ctx->effect_buf_prev.height;
             img_buf_tmp = ctx->effect_buf_prev;
             ctx->effect_buf_prev = ctx->effect_buf_next;
             ctx->effect_buf_next = img_buf_tmp;
@@ -662,6 +704,8 @@ static img_err_code img_enc_effect(img_enc_ctx *img)
         {
             color_invert(ctx->effect_buf_prev.buf, ctx->effect_buf_next.buf, ctx->effect_buf_prev.width, ctx->effect_buf_prev.height);
             ctx->effect_buf_next.color = COLOR_GRAY_8;
+            ctx->effect_buf_next.width = ctx->effect_buf_prev.width;
+            ctx->effect_buf_next.height = ctx->effect_buf_prev.height;
             img_buf_tmp = ctx->effect_buf_prev;
             ctx->effect_buf_prev = ctx->effect_buf_next;
             ctx->effect_buf_next = img_buf_tmp;
@@ -679,6 +723,8 @@ static img_err_code img_enc_effect(img_enc_ctx *img)
                 return err_code;
             }
             ctx->effect_buf_next.color = COLOR_RGB888;
+            ctx->effect_buf_next.width = ctx->effect_buf_prev.width;
+            ctx->effect_buf_next.height = ctx->effect_buf_prev.height;
             img_buf_tmp = ctx->effect_buf_prev;
             ctx->effect_buf_prev = ctx->effect_buf_next;
             ctx->effect_buf_next = img_buf_tmp;
@@ -696,6 +742,8 @@ static img_err_code img_enc_effect(img_enc_ctx *img)
                 return err_code;
             }
             ctx->effect_buf_next.color = COLOR_RGB888;
+            ctx->effect_buf_next.width = ctx->effect_buf_prev.width;
+            ctx->effect_buf_next.height = ctx->effect_buf_prev.height;
             img_buf_tmp = ctx->effect_buf_prev;
             ctx->effect_buf_prev = ctx->effect_buf_next;
             ctx->effect_buf_next = img_buf_tmp;
@@ -843,27 +891,39 @@ img_err_code img_enc_cfg(img_enc_ctx *img, img_enc_param *param)
     }
     ctx->func = convert_list[param->format];
 
+    ctx->width = ctx->in_buf.width;
+    ctx->height = ctx->in_buf.height;
+    ctx->img_size_preview = ctx->width * ctx->height * 3;
+
     return IMG_OK;
 }
 
-int32_t img_enc_get_preview_size(img_enc_ctx *img)
+img_err_code img_enc_get_preview_size(img_enc_ctx *img, int32_t *size, int32_t *width, int32_t *height)
 {
-    if (img == NULL)
+    if (img == NULL || size == NULL || width == NULL || height == NULL)
     {
         return IMG_PARAM_NULL_PTR;
     }
     _img_enc_ctx *ctx = (_img_enc_ctx *)img;
-    return ctx->effect_buf_prev.width * ctx->effect_buf_prev.height * 3;
+    *size = ctx->img_size_preview;
+    *width = ctx->width;
+    *height = ctx->height;
+
+    return IMG_OK;
 }
 
-int32_t img_enc_get_size(img_enc_ctx *img)
+img_err_code img_enc_get_size(img_enc_ctx *img, int32_t *size, int32_t *width, int32_t *height)
 {
-    if (img == NULL)
+    if (img == NULL || size == NULL || width == NULL || height == NULL)
     {
         return IMG_PARAM_NULL_PTR;
     }
     _img_enc_ctx *ctx = (_img_enc_ctx *)img;
-    return ctx->img_size;
+    *size = ctx->img_size;
+    *width = ctx->width;
+    *height = ctx->height;
+
+    return IMG_OK;
 }
 
 img_err_code img_enc_preview(img_enc_ctx *img, void *data, int32_t len)
@@ -890,20 +950,44 @@ img_err_code img_enc_preview(img_enc_ctx *img, void *data, int32_t len)
         return err_code;
     }
 
-    if (ctx->effect_buf_next.color == COLOR_GRAY_8)
+    if (ctx->param.format >= FMT_BITMAP_RL && ctx->param.format <= FMT_BITMAP_CRM)
     {
-        // 二值化并转为rgb
-        gray2binarization(ctx->effect_buf_prev.buf, ctx->effect_buf_next.buf, ctx->effect_buf_prev.width, ctx->effect_buf_prev.height);
-        gray2rgb888(ctx->effect_buf_next.buf, data, ctx->effect_buf_next.width, ctx->effect_buf_next.height);
+        if (ctx->effect_buf_prev.color == COLOR_GRAY_8)
+        {
+            // 二值化并转为rgb
+            gray2binarization(ctx->effect_buf_prev.buf, ctx->effect_buf_next.buf, ctx->effect_buf_prev.width, ctx->effect_buf_prev.height);
+            gray2rgb888(ctx->effect_buf_next.buf, data, ctx->effect_buf_prev.width, ctx->effect_buf_prev.height);
+        }
+        else
+        {
+            return IMG_OTHER_ERR;
+        }
     }
-    else if (ctx->effect_buf_next.color == COLOR_RGB888)
+    else if (ctx->param.format == FMT_WEB)
     {
-        memcpy(data, ctx->effect_buf_prev.buf, out_size);
+        // 色彩转换
+        rgb8882rgb888_web(ctx->effect_buf_prev.buf, ctx->effect_buf_prev.width, ctx->effect_buf_prev.height);
+        if (ctx->effect_buf_prev.color == COLOR_RGB888)
+        {
+            memcpy(data, ctx->effect_buf_prev.buf, out_size);
+        }
+        else
+        {
+            return IMG_OTHER_ERR;
+        }
     }
-    else
+    else if (ctx->param.format >= FMT_RGB565 && ctx->param.format <= FMT_BGRA5551)
     {
-        // 暂不支持
-        return IMG_OTHER_ERR;
+        // 色彩转换
+        rgb8882rgb888_rgb555(ctx->effect_buf_prev.buf, ctx->effect_buf_prev.width, ctx->effect_buf_prev.height);
+        if (ctx->effect_buf_prev.color == COLOR_RGB888)
+        {
+            memcpy(data, ctx->effect_buf_prev.buf, out_size);
+        }
+        else
+        {
+            return IMG_OTHER_ERR;
+        }
     }
 
     return IMG_OK;

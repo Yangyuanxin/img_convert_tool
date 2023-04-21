@@ -60,9 +60,12 @@ img_err_code img_enc_cfg(img_enc_ctx *img, img_enc_param *param);
  * @brief 获取预览图像的大小
  * 
  * @param img 编码器指针
- * @return int32_t 预览图像的大小
+ * @param size 预览图像的大小
+ * @param width 预览图像的宽度
+ * @param height 预览图像的高度
+ * @return img_err_code 错误码
  */
-int32_t img_enc_get_preview_size(img_enc_ctx *img);
+img_err_code img_enc_get_preview_size(img_enc_ctx *img, int32_t *size, int32_t *width, int32_t *height);
 
 /**
  * @brief 获取预览图片
@@ -75,12 +78,15 @@ int32_t img_enc_get_preview_size(img_enc_ctx *img);
 img_err_code img_enc_preview(img_enc_ctx *img, void *data, int32_t len);
 
 /**
- * @brief 获取输出图像的大小
+ * @brief 获取图像的大小
  * 
  * @param img 编码器指针
- * @return int32_t 输出图像的大小
+ * @param size 图像的大小
+ * @param width 图像的宽度
+ * @param height 图像的高度
+ * @return img_err_code 错误码
  */
-int32_t img_enc_get_size(img_enc_ctx *img);
+img_err_code img_enc_get_size(img_enc_ctx *img, int32_t *size, int32_t *width, int32_t *height);
 
 /**
  * @brief 获取输出图像

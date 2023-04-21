@@ -99,11 +99,11 @@ img_err_code img_dec_seek(img_dec_ctx *img, img_seek_e seek, int32_t to);
 int32_t img_dec_tell(img_dec_ctx *img);
 
 /**
- * @brief 解码
+ * @brief 解码图片
  * 
  * @param img 已打开的解码器
- * @param data 保存输出数据的缓存
- * @param len 输出缓存的大小
+ * @param data 保存输出数据的缓存，数据格式为RGB888
+ * @param len 输出缓存的大小，不小于 width * height * 3
  * @return img_err_code 错误码
  */
 img_err_code img_dec(img_dec_ctx *img, void *data, int32_t len);

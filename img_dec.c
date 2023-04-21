@@ -48,7 +48,7 @@ static void argb1555_to_rgb888(uint8_t *in, uint8_t *out, int32_t h, int32_t v);
 static void bgra5551_to_rgb888(uint8_t *in, uint8_t *out, int32_t h, int32_t v);
 
 // 解码函数列表，必须与 fmt_e 的顺序保持一致
-const convert convert_list[] = {
+static const convert convert_list[] = {
     NULL,
     bitmap_rl_to_rgb888,
     bitmap_rm_to_rgb888,
