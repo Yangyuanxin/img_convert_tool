@@ -151,11 +151,6 @@ def dec_cfg_cbox_change(event):
         dec_cfg_set()
 
 def dec_cfg_spin_change(*args):
-    # print(tk_img_height.get())
-    # print(tk_img_width.get())
-    # print(tk_file_offset.get())
-    # print(tk_img_head_size.get())
-    # print(tk_img_tail_size.get())
     img_dec_param.height = tk_img_height.get()
     img_dec_param.width = tk_img_width.get()
     img_dec_param.file_offset = tk_file_offset.get()
@@ -170,12 +165,14 @@ def select_file():
 
 def open_file():
     global img_dec_ptr
-    entry_img_file.config(state="readonly")
     file_path = tk_file_path.get()
     inputfile = create_string_buffer(file_path.encode("gbk"))
     img_dec_ptr = img_dec_dll.img_dec_open(inputfile)
     if (bool(img_dec_ptr)):
         lb_status_content.config(text="打开完成")
+        entry_img_file.config(state="readonly")
+        bt_select_file.configure(state="disabled")
+        bt_open_img.configure(state="disabled")
     else:
         lb_status_content.config(text="无法打开")
 
@@ -184,6 +181,8 @@ def close_file():
     img_dec_dll.img_dec_close(img_dec_ptr)
     img_dec_ptr = None
     entry_img_file.config(state="normal")
+    bt_select_file.configure(state="normal")
+    bt_open_img.configure(state="normal")
 
 def prev_img():
     global img_total_num
@@ -323,17 +322,20 @@ frame_settings.pack(anchor=tk.W)
 frame_file = tk.Frame(frame_settings)
 frame_file.grid(row=0, column=0, sticky=tk.W)
 
-bt_select_file = tk.Button(frame_file, text="选择文件", width=10, height=1, command=select_file)
+lbfm_open_file = tk.LabelFrame(frame_file, text="文件")
+lbfm_open_file.grid(row=0, column=0, padx=G_GRID_PADX, pady=G_GRID_PADY, sticky=tk.N)
+
+bt_select_file = tk.Button(lbfm_open_file, text="选择文件", width=10, height=1, command=select_file)
 bt_select_file.grid(row=0, column=0, padx=G_GRID_PADX, pady=G_GRID_PADY)
 
-entry_img_file = tk.Entry(frame_file, width=40, textvariable=tk_file_path)
+entry_img_file = tk.Entry(lbfm_open_file, width=40, textvariable=tk_file_path)
 entry_img_file.grid(row=0, column=1, padx=G_GRID_PADX, pady=G_GRID_PADY)
 
-bt_load_img = tk.Button(frame_file, text="打开", width=8, height=1, command=open_file)
-bt_load_img.grid(row=0, column=2, padx=G_GRID_PADX, pady=G_GRID_PADY)
+bt_open_img = tk.Button(lbfm_open_file, text="打开", width=8, height=1, command=open_file)
+bt_open_img.grid(row=0, column=2, padx=G_GRID_PADX, pady=G_GRID_PADY)
 
-bt_load_img = tk.Button(frame_file, text="关闭", width=8, height=1, command=close_file)
-bt_load_img.grid(row=0, column=3, padx=G_GRID_PADX, pady=G_GRID_PADY)
+bt_close_img = tk.Button(lbfm_open_file, text="关闭", width=8, height=1, command=close_file)
+bt_close_img.grid(row=0, column=3, padx=G_GRID_PADX, pady=G_GRID_PADY)
 
 
 
@@ -427,9 +429,6 @@ bt_save_img.grid(row=1, column=0, padx=G_GRID_PADX, pady=G_GRID_PADY)
 bt_save_img = tk.Button(frame_btn_box, text="保存全部", width=10, height=1, command=save_imgs)
 bt_save_img.grid(row=1, column=1, padx=G_GRID_PADX, pady=G_GRID_PADY)
 
-# bt_save_img = tk.Button(frame_btn_box, text="帮助", width=10, height=1)
-# bt_save_img.grid(row=1, column=2, padx=G_GRID_PADX, pady=G_GRID_PADY)
-
 lb_status_title = tk.Label(frame_btn_box, text="信息：")
 lb_status_title.grid(row=1, column=4, padx=G_GRID_PADX, pady=G_GRID_PADY, sticky=tk.E)
 
@@ -438,15 +437,14 @@ lb_status_content.grid(row=1, column=5, columnspan=2, padx=G_GRID_PADX, pady=G_G
 
 
 
-frame_img_src = tk.Frame(window)
-frame_img_src.pack(anchor=tk.W, fill=tk.BOTH, expand=True)
+lbfm_img_src = tk.LabelFrame(window, text="预览")
+lbfm_img_src.pack(anchor=tk.W, padx=G_GRID_PADX, pady=G_GRID_PADY, fill=tk.BOTH, expand=True)
 
-# canvas_src = tk.Canvas(frame_img_src, width = 600, height = 100)
-canvas_src = tk.Canvas(frame_img_src)
-canvas_src_scroll_x = tk.Scrollbar(frame_img_src, orient=tk.HORIZONTAL)
+canvas_src = tk.Canvas(lbfm_img_src)
+canvas_src_scroll_x = tk.Scrollbar(lbfm_img_src, orient=tk.HORIZONTAL)
 canvas_src_scroll_x.config(command=canvas_src.xview)
 canvas_src_scroll_x.pack(side=tk.BOTTOM, fill=tk.X)
-canvas_src_scroll_y = tk.Scrollbar(frame_img_src, orient=tk.VERTICAL)
+canvas_src_scroll_y = tk.Scrollbar(lbfm_img_src, orient=tk.VERTICAL)
 canvas_src_scroll_y.config(command=canvas_src.yview)
 canvas_src_scroll_y.pack(side=tk.RIGHT, fill=tk.Y)
 
@@ -454,7 +452,7 @@ canvas_src.config(xscrollcommand=canvas_src_scroll_x.set)
 canvas_src.config(yscrollcommand=canvas_src_scroll_y.set)
 # canvas_src.config(scrollregion=(0,0,img_src.width(),img_src.height()))
 canvas_img = canvas_src.create_image(G_GRID_PADX, G_GRID_PADY, anchor=tk.NW) # 坐标不要设置为0,0 图像边缘会被canvas遮住
-canvas_src.pack(fill=tk.BOTH)
+canvas_src.pack(fill=tk.BOTH, expand=True)
 # canvas_src.create_image(0,0,image=img_src,anchor=tk.NW)
 
 
