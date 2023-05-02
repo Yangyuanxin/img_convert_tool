@@ -1,13 +1,13 @@
 /**
  * @file main.c
  * @author dma
- * @brief BMPÍ¼Æ¬ÅúÁ¿×ªÏñËØÍ¼
+ * @brief å›¾åƒè½¬æ¢å·¥å…·
  * @note
  * 
- * @version 0.3
- * @date 2022-10-15
+ * @version 0.4
+ * @date 2023-05-02
  * 
- * @copyright Copyright (c) 2021
+ * @copyright Copyright (c) 2023
  * 
  */
 
@@ -16,220 +16,66 @@
 #include <stdint.h>
 #include <string.h>
 #include "argparse.h"
+#include "img_dec.h"
+#include "img_enc.h"
+#include "img_common.h"
 
 #define SPECIFICATION \
-"\n" \
-"contvert bmp to other format\n" \
-"\n" \
 "==== format specification ====\n" \
+"bitmap_rl, bitmap_rm, bitmap_cl, bitmap_cm,\n" \
+"bitmap_rcl, bitmap_rcm, bitmap_crl, bitmap_crm,\n" \
+"web, rgb565, bgr565, argb1555, bgra5551,\n" \
 "\n" \
-"mode 1 = row by row, LSB\n" \
-"mode 2 = row by row, MSB\n" \
-"mode 3 = column by column, LSB\n" \
-"mode 4 = column by column, MSB\n" \
-"mode 5 = row column, LSB\n" \
-"mode 6 = row column, MSB\n" \
-"mode 7 = column row, LSB\n" \
-"mode 8 = column row, MSB\n" \
-"\n" \
-"data format in each mode (example 20*20 pixel img)\n" \
-"mode 1,2\n" \
-"Byte1    Byte2    Byte3\n" \
-"Byte4    Byte5    Byte6\n" \
-"Byte7    Byte8    Byte9\n" \
-"...\n" \
-"Byte58   Byte59   Byte60\n" \
-"\n" \
-"mode 3,4\n" \
-"Byte1    Byte4    Byte7  ...  Byte58\n" \
-"Byte2    Byte5    Byte8  ...  Byte59\n" \
-"Byte3    Byte6    Byte9  ...  Byte60\n" \
-"\n" \
-"mode 5,6\n" \
-"Byte1    Byte21    Byte41\n" \
-"Byte2    Byte22    Byte42\n" \
-"Byte3    Byte23    Byte43\n" \
-"...\n" \
-"Byte20   Byte40    Byte60\n" \
-"\n" \
-"mode 7,8\n" \
-"Byte1    Byte2    Byte3   ...  Byte20\n" \
-"Byte21   Byte22   Byte23  ...  Byte40\n" \
-"Byte41   Byte42   Byte43  ...  Byte60\n" \
-"\n" \
-"\n" \
-"coord in bit for LSB and MSB\n" \
-"\n" \
-"LSB mode 1,5\n" \
-"B7  B6  B5  B4  B3  B2  B1  B0\n" \
-"x+7 x+6 x+5 x+4 x+3 x+2 x+1 x+0\n" \
-"\n" \
-"LSB mode 3,7\n" \
-"B7  B6  B5  B4  B3  B2  B1  B0\n" \
-"y+7 y+6 y+5 y+4 y+3 y+2 y+1 y+0\n" \
-"\n" \
-"MSB mode 2,6\n" \
-"B7  B6  B5  B4  B3  B2  B1  B0\n" \
-"x+0 x+1 x+2 x+3 x+4 x+5 x+6 x+7\n" \
-"\n" \
-"MSB mode 4,8\n" \
-"B7  B6  B5  B4  B3  B2  B1  B0\n" \
-"y+0 y+1 y+2 y+3 y+4 y+5 y+6 y+7\n"
+"For more information please refer to the readme.md\n" \
 
-
-// Î»Í¼ÎÄ¼şÍ·
-typedef struct __attribute__((packed)) BMP_FILE_HEAD
-{
-    unsigned short bfType; // ÎÄ¼şÀàĞÍ£¬±ØĞëÊÇ0x424D£¬Ò²¾ÍÊÇ×Ö·ûBM
-    unsigned int bfSize; // ÎÄ¼ş´óĞ¡£¬°üº¬Í·
-    unsigned short bfReserved1; // ±£Áô×Ö
-    unsigned short bfReserved2; // ±£Áô×Ö
-    unsigned int bfOffBits; // ÎÄ¼şÍ·µ½Êµ¼ÊµÄÍ¼ÏñÊı¾İµÄÆ«ÒÆ×Ö½ÚÊı
-}BMP_FILE_HEAD;
-
-// Î»Í¼ĞÅÏ¢Í·
-typedef struct __attribute__((packed)) BMP_INFO_HEAD
-{
-    unsigned int biSize; // Õâ¸ö½á¹¹ÌåµÄ³¤¶È£¬Îª40×Ö½Ú
-    int biWidth; // Í¼ÏñµÄ¿í¶È
-    int biHeight; // Í¼ÏñµÄ³¤¶È
-    unsigned short biPlanes; // ±ØĞëÊÇ1
-    unsigned short biBitCount; // ±íÊ¾ÑÕÉ«Ê±ÒªÓÃµ½µÄÎ»Êı£¬³£ÓÃµÄÖµÎª 1£¨ºÚ°×¶şÉ«Í¼£©,4£¨16 É«Í¼£©,8£¨256 É«£©,24£¨Õæ²ÊÉ«Í¼£©£¨ĞÂµÄ.bmp ¸ñÊ½Ö§³Ö 32 Î»É«£¬ÕâÀï²»×öÌÖÂÛ£©
-    unsigned int biCompression; // Ö¸¶¨Î»Í¼ÊÇ·ñÑ¹Ëõ£¬ÓĞĞ§µÄÖµÎª BI_RGB£¬BI_RLE8£¬BI_RLE4£¬BI_BITFIELDS£¨¶¼ÊÇÒ»Ğ©Windows¶¨ÒåºÃµÄ³£Á¿£¬ÔİÊ±Ö»¿¼ÂÇBI_RGB²»Ñ¹ËõµÄÇé¿ö£©
-    unsigned int biSizeImage; // Ö¸¶¨Êµ¼ÊµÄÎ»Í¼Êı¾İÕ¼ÓÃµÄ×Ö½ÚÊı
-    int biXPelsPerMeter; // Ö¸¶¨Ä¿±êÉè±¸µÄË®Æ½·Ö±æÂÊ
-    int biYPelsPerMeter; // Ö¸¶¨Ä¿±êÉè±¸µÄ´¹Ö±·Ö±æÂÊ
-    unsigned int biClrUsed; // Ö¸¶¨±¾Í¼ÏóÊµ¼ÊÓÃµ½µÄÑÕÉ«Êı£¬Èç¹û¸ÃÖµÎªÁã£¬ÔòÓÃµ½µÄÑÕÉ«ÊıÎª 2 µÄ biBitCount ´Î·½
-    unsigned int biClrImportant; // Ö¸¶¨±¾Í¼ÏóÖĞÖØÒªµÄÑÕÉ«Êı£¬Èç¹û¸ÃÖµÎªÁã£¬ÔòÈÏÎªËùÓĞµÄÑÕÉ«¶¼ÊÇÖØÒªµÄ
-}BMP_INFO_HEAD;
-
-// µ÷É«°å
-// typedef struct RGBQUAD
-// {
-//     unsigned char rgbBlue; // ¸ÃÑÕÉ«µÄÀ¶É«·ÖÁ¿
-//     unsigned char rgbGreen; // ¸ÃÑÕÉ«µÄÂÌÉ«·ÖÁ¿
-//     unsigned char rgbRed; // ¸ÃÑÕÉ«µÄºìÉ«·ÖÁ¿
-//     unsigned char rgbReserved; // ±£ÁôÖµ
-// };
-
-const uint32_t web_color[216] = {
-    0x000000, 0x000033, 0x000066, 0x000099, 0x0000CC, 0x0000FF,
-    0x003300, 0x003333, 0x003366, 0x003399, 0x0033CC, 0x0033FF,
-    0x006600, 0x006633, 0x006666, 0x006699, 0x0066CC, 0x0066FF,
-    0x009900, 0x009933, 0x009966, 0x009999, 0x0099CC, 0x0099FF,
-    0x00CC00, 0x00CC33, 0x00CC66, 0x00CC99, 0x00CCCC, 0x00CCFF,
-    0x00FF00, 0x00FF33, 0x00FF66, 0x00FF99, 0x00FFCC, 0x00FFFF,
-    0x330000, 0x330033, 0x330066, 0x330099, 0x3300CC, 0x3300FF,
-    0x333300, 0x333333, 0x333366, 0x333399, 0x3333CC, 0x3333FF,
-    0x336600, 0x336633, 0x336666, 0x336699, 0x3366CC, 0x3366FF,
-    0x339900, 0x339933, 0x339966, 0x339999, 0x3399CC, 0x3399FF,
-    0x33CC00, 0x33CC33, 0x33CC66, 0x33CC99, 0x33CCCC, 0x33CCFF,
-    0x33FF00, 0x33FF33, 0x33FF66, 0x33FF99, 0x33FFCC, 0x33FFFF,
-    0x660000, 0x660033, 0x660066, 0x660099, 0x6600CC, 0x6600FF,
-    0x663300, 0x663333, 0x663366, 0x663399, 0x6633CC, 0x6633FF,
-    0x666600, 0x666633, 0x666666, 0x666699, 0x6666CC, 0x6666FF,
-    0x669900, 0x669933, 0x669966, 0x669999, 0x6699CC, 0x6699FF,
-    0x66CC00, 0x66CC33, 0x66CC66, 0x66CC99, 0x66CCCC, 0x66CCFF,
-    0x66FF00, 0x66FF33, 0x66FF66, 0x66FF99, 0x66FFCC, 0x66FFFF,
-    0x990000, 0x990033, 0x990066, 0x990099, 0x9900CC, 0x9900FF,
-    0x993300, 0x993333, 0x993366, 0x993399, 0x9933CC, 0x9933FF,
-    0x996600, 0x996633, 0x996666, 0x996699, 0x9966CC, 0x9966FF,
-    0x999900, 0x999933, 0x999966, 0x999999, 0x9999CC, 0x9999FF,
-    0x99CC00, 0x99CC33, 0x99CC66, 0x99CC99, 0x99CCCC, 0x99CCFF,
-    0x99FF00, 0x99FF33, 0x99FF66, 0x99FF99, 0x99FFCC, 0x99FFFF,
-    0xCC0000, 0xCC0033, 0xCC0066, 0xCC0099, 0xCC00CC, 0xCC00FF,
-    0xCC3300, 0xCC3333, 0xCC3366, 0xCC3399, 0xCC33CC, 0xCC33FF,
-    0xCC6600, 0xCC6633, 0xCC6666, 0xCC6699, 0xCC66CC, 0xCC66FF,
-    0xCC9900, 0xCC9933, 0xCC9966, 0xCC9999, 0xCC99CC, 0xCC99FF,
-    0xCCCC00, 0xCCCC33, 0xCCCC66, 0xCCCC99, 0xCCCCCC, 0xCCCCFF,
-    0xCCFF00, 0xCCFF33, 0xCCFF66, 0xCCFF99, 0xCCFFCC, 0xCCFFFF,
-    0xFF0000, 0xFF0033, 0xFF0066, 0xFF0099, 0xFF00CC, 0xFF00FF,
-    0xFF3300, 0xFF3333, 0xFF3366, 0xFF3399, 0xFF33CC, 0xFF33FF,
-    0xFF6600, 0xFF6633, 0xFF6666, 0xFF6699, 0xFF66CC, 0xFF66FF,
-    0xFF9900, 0xFF9933, 0xFF9966, 0xFF9999, 0xFF99CC, 0xFF99FF,
-    0xFFCC00, 0xFFCC33, 0xFFCC66, 0xFFCC99, 0xFFCCCC, 0xFFCCFF,
-    0xFFFF00, 0xFFFF33, 0xFFFF66, 0xFFFF99, 0xFFFFCC, 0xFFFFFF,
-};
-
-// È«¾Ö±äÁ¿
-FILE *fpr;
-FILE *fpwb; // Êä³ö¶ş½øÖÆÊı¾İ
-FILE *fpwc; // Êä³öCÊı×é
-BMP_FILE_HEAD BFH;
-BMP_INFO_HEAD BIH;
-
-unsigned char *bmp_data = NULL;
-unsigned char *rgb888_data = NULL;
-unsigned char *out_data = NULL;
-uint32_t out_data_size = 0;
-
-// º¯ÊıÉùÃ÷
-int bmp_read_head(FILE *fp);
-void bmp_to_rgb888(uint8_t *in, uint8_t *out, int h, int v);
-void rgb888_to_bitmap(uint8_t *in, uint8_t *out, int h, int v);
-void rgb888_to_web(uint8_t *in, uint8_t *out, int h, int v);
-void rgb888_to_rgb565(uint8_t *in, uint8_t *out, int h, int v);
-void rgb888_to_bgr565(uint8_t *in, uint8_t *out, int h, int v);
-void rgb888_to_argb1555(uint8_t *in, uint8_t *out, int h, int v);
-void rgb888_to_bgra5551(uint8_t *in, uint8_t *out, int h, int v);
-
-void bin2array_start(FILE **fp, char *name);
-void bin2array_convert(FILE **fp, void *in, int in_len, int size);
-void bin2array_end(FILE **fp);
-
-int convert(char *filename);
-void dbg_rgb888_dump_bmp(char *path, uint8_t *data, int32_t width, int32_t height);
-void dbg_rgb888_dump_ppm(char *path, uint8_t *data, int32_t width, int32_t height);
-
-// Î»Í¼Í¼Ïñ¸ñÊ½
-// r=row,c=column,l=lsb,m=msb
-typedef enum {
-    BITMAP_MODE_RL = 1,
-    BITMAP_MODE_RM = 2,
-    BITMAP_MODE_CL = 3,
-    BITMAP_MODE_CM = 4,
-    BITMAP_MODE_RCL = 5,
-    BITMAP_MODE_RCM = 6,
-    BITMAP_MODE_CRL = 7,
-    BITMAP_MODE_CRM = 8,
-    BITMAP_MODE_INVALID,
-} bitmap_mode_e;
-
-// Ö§³ÖµÄ¸ñÊ½
-typedef enum {
-    FMT_BITMAP = 0,
-    FMT_WEB    = 1,
-    FMT_RGB565 = 2,
-    FMT_BGR565 = 3,
-    FMT_ARGB1555 = 4,
-    FMT_BGRA5551 = 5,
-    FMT_INVALID,
-} fmt_e;
+#define SAFE_FREE(p) do { if (NULL != (p)){ free(p); (p) = NULL; } }while(0)
 
 typedef struct {
     fmt_e fmt;
     char fmt_str[12];
-    void(*color_convert)(uint8_t *in, uint8_t *out, int h, int v);
 } fmt_s;
 
 const fmt_s format_preset[] = {
-    {FMT_BITMAP, "bitmap", rgb888_to_bitmap},
-    {FMT_WEB   , "web",    rgb888_to_web},
-    {FMT_RGB565, "rgb565", rgb888_to_rgb565},
-    {FMT_BGR565, "bgr565", rgb888_to_bgr565},
-    {FMT_ARGB1555, "argb1555", rgb888_to_argb1555},
-    {FMT_BGRA5551, "bgra5551", rgb888_to_bgra5551},
+    {0             , ""},
+    {FMT_BITMAP_RL , "bitmap_rl"},
+    {FMT_BITMAP_RM , "bitmap_rm"},
+    {FMT_BITMAP_CL , "bitmap_cl"},
+    {FMT_BITMAP_CM , "bitmap_cm"},
+    {FMT_BITMAP_RCL, "bitmap_rcl"},
+    {FMT_BITMAP_RCM, "bitmap_rcm"},
+    {FMT_BITMAP_CRL, "bitmap_crl"},
+    {FMT_BITMAP_CRM, "bitmap_crm"},
+    {FMT_WEB       , "web"},
+    {FMT_RGB565    , "rgb565"},
+    {FMT_BGR565    , "bgr565"},
+    {FMT_ARGB1555  , "argb1555"},
+    {FMT_BGRA5551  , "bgra5551"},
 };
+
 const fmt_s *aim_fmt = NULL;
 
-// ÉèÖÃ
+// å…¨å±€å˜é‡
+FILE *fpw;
+FILE *fpr;
+
+// è®¾ç½®
 #define ELEMENT_PER_LINE 16
-int32_t bitmap_mode = 0; // ·´É«
-int32_t reverse_color = 0; // ·´É«
-int32_t big_endian = 0; // ´ó¶Ë
-int32_t luminance = 128; // ÁÁ¶È
-uint32_t transparence = 0x12345678; // Í¸Ã÷É«
-uint8_t tr = 0, tg = 0, tb = 0; // Í¸Ã÷É«
+
+int32_t invert_color = 0; // åè‰²
+int32_t big_endian = 0; // å¤§ç«¯
+int32_t edge = 0; // è¾¹ç¼˜æ£€æµ‹ç®—æ³•
+int32_t dithering = 0; // æŠ–åŠ¨ç®—æ³•
+int32_t luminance = 0; // äº®åº¦
+int32_t contrast = 0; // å¯¹æ¯”åº¦
+uint32_t transparence = 0x12345678; // é€æ˜è‰²
+
+int32_t decode_height = 0; // è§£ç å›¾åƒçš„é«˜åº¦
+int32_t decode_width = 0; // è§£ç å›¾åƒçš„å®½åº¦
+int32_t file_offset = 0;
+int32_t img_head_size = 0;
+int32_t img_tail_size = 0;
+
+char *mode_str = NULL;
 char *format_str = NULL;
 char *input_str = NULL;
 
@@ -237,500 +83,73 @@ char *input_str = NULL;
 struct argparse argparse;
 
 static const char *const usages[] = {
-    "main.exe [options]",
+    "img_convertor.exe [options]",
     NULL,
 };
 
 struct argparse_option options[] = {
     OPT_HELP(),
     OPT_GROUP("Basic options"),
-    OPT_INTEGER('m', "mode", &bitmap_mode, "bitmap mode, 1 to 8, default 0", NULL, 0, 0),
-    OPT_BOOLEAN('r', "reverse", &reverse_color, "reverse color, only for bitmap, default FALSE", NULL, 0, 0),
-    OPT_BOOLEAN('b', "bigendian", &big_endian, "big_endian, only for 16bit format, e.g. rgb565, argb565, default FALSE", NULL, 0, 0),
-    OPT_INTEGER('l', "luminance", &luminance, "set luminance, only for bitmap, default 128", NULL, 0, 0),
-    OPT_INTEGER('t', "transparence", &transparence, "set a color as transparent color, only for argb1555 and bgra5551", NULL, 0, 0),
-    OPT_STRING('f', "format", &format_str, "set output format(bitmap, web, rgb565, bgr565, argb1555, bgra5551)", NULL, 0, 0),
-    OPT_STRING('i', "input", &input_str, "set one input file", NULL, 0, 0),
+    OPT_STRING('m', "mode", &mode_str, "convert mode, enc or dec", NULL, 0, 0),
+    OPT_STRING('f', "format", &format_str, "set input/output format(format specification see below)", NULL, 0, 0),
+
+    OPT_BOOLEAN('r', "reverse", &invert_color, "invert color, only for encode and bitmap format, default FALSE", NULL, 0, 0),
+    OPT_BOOLEAN('b', "bigendian", &big_endian, "big endian, only for 16bit format, e.g. rgb565, argb565, default FALSE", NULL, 0, 0),
+    OPT_BOOLEAN('e', "edge", &edge, "use edge detector algorithm, only for encode and bitmap format, default FALSE", NULL, 0, 0),
+    OPT_BOOLEAN('d', "dithering", &dithering, "use dithering algorithm, only for encode, default FALSE", NULL, 0, 0),
+    OPT_INTEGER('l', "luminance", &luminance, "set luminance, only for encode and bitmap format, between -100 and +100, default 0", NULL, 0, 0),
+    OPT_INTEGER('c', "contrast", &contrast, "set contrast, only for encode and bitmap format, between -100 and +100, default 0", NULL, 0, 0),
+    OPT_INTEGER('t', "transparence", &transparence, "set a color as transparent color, only for encode and argb1555, bgra5551 format", NULL, 0, 0),
+
+    OPT_INTEGER('W', "width", &decode_width, "set image width, only for decode", NULL, 0, 0),
+    OPT_INTEGER('H', "height", &decode_height, "set image height, only for decode", NULL, 0, 0),
+    OPT_INTEGER('s', "shift", &file_offset, "file offset, only for decode", NULL, 0, 0),
+    OPT_INTEGER('H', "head", &img_head_size, "image head size, only for decode", NULL, 0, 0),
+    OPT_INTEGER('T', "tail", &img_tail_size, "image tail size, only for decode", NULL, 0, 0),
+
+    OPT_STRING('i', "input", &input_str, "set input file", NULL, 0, 0),
     OPT_END(),
 };
 
-int main(int argc, const char **argv)
+static void change_ext_name(char* filename, char *ext_name)
 {
-    char filename[512];
-    int i;
-    int ret = 0;
-
-    argparse_init(&argparse, options, usages, 0);
-    argparse_describe(&argparse, NULL, SPECIFICATION);
-    argparse_parse(&argparse, argc, argv);
-
-    if (luminance < 0 || luminance > 255)
-    {
-        printf("luminance is out of range! \n");
-        return 0;
-    }
-    luminance *= 3; // ·½±ã¼ÆËã
-
-    if (format_str == NULL)
-    {
-        printf("please set output format\n");
-        return 0;
-    }
-
-    for (i = 0; i < FMT_INVALID; i++)
-    {
-        if (strcmp(format_preset[i].fmt_str, format_str) == 0)
-        {
-            aim_fmt = &format_preset[i];
-            break;
-        }
-    }
-    if (aim_fmt == NULL)
-    {
-        printf("unknown format(%s)\n", format_str);
-        return 0;
-    }
-
-    if (input_str == NULL)
-    {
-        strcpy(filename, ".\\img\\0000.bmp");
-    }
-    else
-    {
-        strcpy(filename, input_str);
-    }
-
-    fpr = fopen(filename, "rb");
-    if(fpr == NULL)
-    {
-        printf("open file %s error \n", filename);
-        return 0;
-    }
-    ret = bmp_read_head(fpr);
-    if(ret)
-    {
-        return 0;
-    }
-    fclose(fpr);
-
-    if (aim_fmt->fmt == FMT_BITMAP)
-    {
-        // ¿í¶È»ò¸ß¶ÈĞèÒªÏòÉÏ¶Ô8È¡Õû£¬ÀıÈç15*9ÏñËØµÄÍ¼Æ¬£¬ºáÏòĞèÒª(15 / 8) * 9 = 18×Ö½ÚÄÚ´æ£¬×İÏòĞèÒª 15 * (9 / 8) =30 ×Ö½ÚÄÚ´æ
-        switch (bitmap_mode)
-        {
-            case BITMAP_MODE_RL:
-            case BITMAP_MODE_RM:
-            case BITMAP_MODE_RCL:
-            case BITMAP_MODE_RCM:
-                out_data_size = BIH.biHeight * ((BIH.biWidth + 7) >> 3);
-                break;
-            case BITMAP_MODE_CL:
-            case BITMAP_MODE_CM:
-            case BITMAP_MODE_CRL:
-            case BITMAP_MODE_CRM:
-                out_data_size = BIH.biWidth * ((BIH.biHeight + 7) >> 3);
-                break;
-            default:
-                printf("error: unknown bitmap mode(%d)\n", bitmap_mode);
-                return 0;
-                break;
-        }
-    }
-    else if (aim_fmt->fmt == FMT_WEB)
-    {
-        out_data_size = BIH.biWidth * BIH.biHeight;
-    }
-    else if (aim_fmt->fmt == FMT_RGB565 || aim_fmt->fmt == FMT_BGR565)
-    {
-        out_data_size = BIH.biWidth * BIH.biHeight * 2;
-    }
-    else if (aim_fmt->fmt == FMT_ARGB1555 || aim_fmt->fmt == FMT_BGRA5551)
-    {
-        out_data_size = BIH.biWidth * BIH.biHeight * 2;
-        if (transparence == 0x12345678)
-        {
-            printf("error: please set transparent color\n");
-            return 0;
-        }
-        else
-        {
-            tr = (transparence >> 16) & 0xFF;
-            tg = (transparence >> 8) & 0xFF;
-            tb = (transparence >> 0) & 0xFF;
-        }
-    }
-    out_data = (unsigned char *)malloc(out_data_size);
-    bmp_data = (unsigned char *)malloc(BIH.biSizeImage);
-    rgb888_data = (unsigned char *)malloc(BIH.biWidth * BIH.biHeight * 3);
-
-    if((fpwb = fopen(".\\img.bin", "wb")) == NULL)
-    {
-        printf("write file \".\\img.bin\" error \n");
-        return 0;
-    }
-
-    printf("\n\n");
-    bin2array_start(&fpwc, "img_data");
-
-    if (input_str == NULL)
-    {
-        i = 0;
-        while (1)
-        {
-            memset(filename, 0, 512);
-            sprintf(filename, ".\\img\\%04d.bmp", i);
-            if (convert(filename))
-            {
-                break;
-            }
-            i++;
-        }
-    }
-    else
-    {
-        strcpy(filename, input_str);
-        convert(filename);
-    }
-
-    fclose(fpwb);
-    bin2array_end(&fpwc);
-
-    free(bmp_data);
-    bmp_data = NULL;
-    free(rgb888_data);
-    rgb888_data = NULL;
-    free(out_data);
-    out_data = NULL;
-
-    return 0;
-}
-
-int convert(char *filename)
-{
-    if((fpr = fopen(filename, "rb")) == NULL)
-    {
-        printf("\nopen %s error, or convert finish\n", filename);
-        return 1;
-    }
-    printf("\rconverting file %s ", filename);
-    fflush(stdout);
-
-    fseek(fpr, BFH.bfOffBits, SEEK_SET);
-    fread(bmp_data, BIH.biSizeImage, 1, fpr);
-    fclose(fpr);
-
-    bmp_to_rgb888(bmp_data, rgb888_data, BIH.biWidth, BIH.biHeight);
-    // dbg_rgb888_dump_ppm("dump.ppm", rgb888_data, BIH.biWidth, BIH.biHeight);
-    memset(out_data, 0, out_data_size);
-    aim_fmt->color_convert(rgb888_data, out_data, BIH.biWidth, BIH.biHeight);
-
-    if (big_endian &&
-        (aim_fmt->fmt == FMT_RGB565   ||
-         aim_fmt->fmt == FMT_BGR565   ||
-         aim_fmt->fmt == FMT_ARGB1555 ||
-         aim_fmt->fmt == FMT_BGRA5551 ) )
-    {
-        uint16_t *d        = (uint16_t *)out_data;
-        const uint16_t *end = d + BIH.biWidth * BIH.biHeight * 2;
-        while (d < end) {
-            *d = ((*d & 0x00FF) << 8) | ((*d & 0xFF00) >> 8);
-            d++;
-        }
-    }
-
-    fwrite(out_data, 1, out_data_size, fpwb);
+    char *separator = NULL;
+    int32_t ext_len = strlen(ext_name);
+    int32_t name_len = strlen(filename);
     
-    bin2array_convert(&fpwc, (void *)out_data, out_data_size, sizeof(unsigned char));
-
-    return 0;
-}
-
-int bmp_read_head(FILE *fp)
-{
-    fseek(fp, 0, SEEK_SET);
-
-    fread(&BFH, sizeof(BFH), 1, fp); // ¶ÁÈ¡BMPÎÄ¼şÍ·
-    fread(&BIH, sizeof(BIH), 1, fp); // ¶ÁÈ¡BMPĞÅÏ¢Í·£¬40×Ö½Ú£¬Ö±½ÓÓÃ½á¹¹Ìå¶Á
-
-    printf("\nBMP file head\n");
-    printf("bfType = %x\n", BFH.bfType);
-    printf("bfSize = %d\n", BFH.bfSize);
-    printf("bfReserved1 = %d\n", BFH.bfReserved1);
-    printf("bfReserved2 = %d\n", BFH.bfReserved2);
-    printf("bfOffBits = %d\n", BFH.bfOffBits);
-
-    printf("\nBMP info head\n");
-    printf("biSize = %d\n", BIH.biSize);
-    printf("biWidth = %d\n", BIH.biWidth);
-    printf("biHeight = %d\n", BIH.biHeight);
-    printf("biPlanes = %d\n", BIH.biPlanes);
-    printf("biBitCount = %d\n", BIH.biBitCount);
-    printf("biCompression = %d\n", BIH.biCompression);
-    printf("biSizeImage = %d\n", BIH.biSizeImage);
-    printf("biXPelsPerMeter = %d\n", BIH.biXPelsPerMeter);
-    printf("biYPelsPerMeter = %d\n", BIH.biYPelsPerMeter);
-    printf("biClrUsed = %d\n", BIH.biClrUsed);
-    printf("biClrImportant = %d\n", BIH.biClrImportant);
-    
-    // if((BFH.bfType != 0x424D) || (BIH.biClrImportant != 0))
-    if((BFH.bfType != 0x4D42))
+    separator = strrchr(filename, '.');
+    if (separator == NULL ||
+        separator - filename <= 1 // æ’é™¤ .\ ..\ ä¹‹ç±»çš„ç›¸å¯¹è·¯å¾„
+        )
     {
-        printf("\nnot bmp file\n");
-        return 1;
+        separator = filename + name_len;
+        *separator = '.';
     }
-
-    if (BIH.biBitCount != 24 || ((BIH.biClrImportant != 0) && (BIH.biClrImportant != 16777216)))
-    {
-        printf("\nnot 24 bit bmp file\n");
-        return 2;
-    }
-
-    return 0;
+    separator += 1;
+    strcpy(separator, ext_name);
+    separator += ext_len;
+    *separator = 0;
 }
 
-#if 0
-// bmp Êı¾İ·­×ª£¬¶ÔÓÚĞĞ¿íÊÇ4ÕûÊı±¶µÄÍ¼Æ¬¿ÉÒÔÌæ´ú bmp_to_rgb888
-void bmp_reversal(uint8_t *buf)
+
+// äºŒè¿›åˆ¶æ•°æ®è½¬Cæ•°ç»„
+int32_t bin2array_start(FILE **fp, char *filename, char *arr_name)
 {
-    int32_t i = 0, j = 0;
-    int32_t h = IMG_H, v = IMG_V;
-    int32_t size = 0;
-
-    // size = h * v * 3;
-    i = 0;
-
-    // bgr×ªrgb
-    for (i = 0; i < v; i++)
-    {
-        for (j = 0; j < h; j++)
-        {
-            buf[i * h * 3 + j * 3] ^= buf[i * h * 3 + j * 3 + 2];
-            buf[i * h * 3 + j * 3 + 2] ^= buf[i * h * 3 + j * 3];
-            buf[i * h * 3 + j * 3] ^= buf[i * h * 3 + j * 3 + 2];
-        }
-    }
-
-    // ±ä»»ĞĞĞò
-    for (i = 0; i < v / 2; i++)
-    {
-        for (j = 0; j < h * 3; j++)
-        {
-            buf[i * h * 3 + j] ^= buf[(v - i - 1) * h * 3 + j];
-            buf[(v - i - 1) * h * 3 + j] ^= buf[i * h * 3 + j];
-            buf[i * h * 3 + j] ^= buf[(v - i - 1) * h * 3 + j];
-        }
-    }
-}
-#endif
-
-void bmp_to_rgb888(uint8_t *in, uint8_t *out, int h, int v)
-{
-    int32_t i = 0, j = 0;
-    unsigned int offset = 0;
-    unsigned int line_size = 0;
-
-    //a=14,b=5
-    //ÆÕÍ¨È¡Õûa/b=2
-    //½øÒ»È¡Õû(a+b-1)/b=3
-    // (((width*biBitCount+7)/8+3)/4*4
-    // (((width*biBitCount)+31)/32)*4
-    // (((width*biBitCount)+31)>>5)<<2
-    // ((width*3)+3)/4*4 // 24bit
-    // line_size = (((h * 24) + 31) >> 5) << 2;
-    line_size = ((h * 3 + 3) >> 2) << 2;
-
-    for (i = 0; i < v; i++)
-    {
-        for (j = 0; j < h; j++)
-        {
-            offset = (v - i - 1) * line_size + j * 3;
-
-            out[i * h * 3 + j * 3]     = in[offset + 2];
-            out[i * h * 3 + j * 3 + 1] = in[offset + 1];
-            out[i * h * 3 + j * 3 + 2] = in[offset];
-        }
-    }
-}
-
-void rgb888_to_bitmap(uint8_t *in, uint8_t *out, int h, int v)
-{
-    int32_t x = 0, y = 0;
-    int32_t avg = 0;
-
-    int32_t he = 0;
-    int32_t ve = 0;
-
-    switch (bitmap_mode)
-    {
-        case BITMAP_MODE_RL:
-        case BITMAP_MODE_RM:
-        case BITMAP_MODE_RCL:
-        case BITMAP_MODE_RCM:
-            he = (h + 7) >> 3;
-            ve = v;
-            break;
-        case BITMAP_MODE_CL:
-        case BITMAP_MODE_CM:
-        case BITMAP_MODE_CRL:
-        case BITMAP_MODE_CRM:
-            he = h;
-            ve = (v + 7) >> 3;
-            break;
-        default:
-            break;
-    }
-
-    for (y = 0; y < v; y++)
-    {
-        for (x = 0; x < h; x++)
-        {
-            avg = in[y * h * 3 + x * 3] + in[y * h * 3 + x * 3 + 1] + in[y * h * 3 + x * 3 + 2];
-            if ((reverse_color == 0 && avg < luminance) ||
-                (reverse_color == 1 && avg > luminance))
-            {
-                continue;
-            }
-
-            switch (bitmap_mode)
-            {
-                case BITMAP_MODE_RL:
-                    out[he * y + (x >> 3)] = out[he * y + (x >> 3)] | (0x01 << (x & 0x07));
-                    break;
-                case BITMAP_MODE_RM:
-                    out[he * y + (x >> 3)] = out[he * y + (x >> 3)] | (0x80 >> (x & 0x07));
-                    break;
-                case BITMAP_MODE_CL:
-                    out[ve * x + (y >> 3)] = out[ve * x + (y >> 3)] | (0x01 << (y & 0x07));
-                    break;
-                case BITMAP_MODE_CM:
-                    out[ve * x + (y >> 3)] = out[ve * x + (y >> 3)] | (0x80 >> (y & 0x07));
-                    break;
-                case BITMAP_MODE_RCL:
-                     out[y + v * (x >> 3)] = out[y + v * (x >> 3)] | (0x01 << (x & 0x07));
-                    break;
-                case BITMAP_MODE_RCM:
-                    out[y + v * (x >> 3)] = out[y + v * (x >> 3)] | (0x80 >> (x & 0x07));
-                    break;
-                case BITMAP_MODE_CRL:
-                    out[x + h * (y >> 3)] = out[x + h * (y >> 3)] | (0x01 << (y & 0x07));
-                    break;
-                case BITMAP_MODE_CRM:
-                    out[x + h * (y >> 3)] = out[x + h * (y >> 3)] | (0x80 >> (y & 0x07));
-                    break;
-                default:
-                    break;
-            }
-        }
-    }
-}
-
-void rgb888_to_web(uint8_t *in, uint8_t *out, int h, int v)
-{
-    uint8_t *d         = (uint8_t *)out;
-    const uint8_t *s   = in;
-    const uint8_t *end = s + h * v * 3;
-
-    while (s < end) {
-        uint8_t r = *s++;
-        uint8_t g = *s++;
-        uint8_t b = *s++;
-        // 0,26,77,128,179,229,255 Á¿»¯ÔÚºÚÉ«¡¢°×É«µÄĞ§¹ûÂÔºÃ
-        // 0,42,85,128,170,213,255 Á¿»¯×î¼òµ¥Ö±¹Û
-        r = r > 229 ? 5 : (r + 26) / 51;
-        g = g > 229 ? 5 : (g + 26) / 51;
-        b = b > 229 ? 5 : (b + 26) / 51;
-        *d++ = r * 36 + g * 6 + b;
-    }
-}
-
-void rgb888_to_rgb565(uint8_t *in, uint8_t *out, int h, int v)
-{
-    uint16_t *d        = (uint16_t *)out;
-    const uint8_t *s   = in;
-    const uint8_t *end = s + h * v * 3;
-
-    while (s < end) {
-        const int r = *s++;
-        const int g = *s++;
-        const int b = *s++;
-        *d++        = (b >> 3) | ((g & 0xFC) << 3) | ((r & 0xF8) << 8);
-    }
-}
-
-void rgb888_to_bgr565(uint8_t *in, uint8_t *out, int h, int v)
-{
-    uint16_t *d        = (uint16_t *)out;
-    const uint8_t *s   = in;
-    const uint8_t *end = s + h * v * 3;
-
-    while (s < end) {
-        const int r = *s++;
-        const int g = *s++;
-        const int b = *s++;
-        *d++        = ((b & 0xF8) << 8) | ((g & 0xFC) << 3) | (r >> 3);
-    }
-}
-
-void rgb888_to_argb1555(uint8_t *in, uint8_t *out, int h, int v)
-{
-    uint16_t *d        = (uint16_t *)out;
-    const uint8_t *s   = in;
-    const uint8_t *end = s + h * v * 3;
-
-    while (s < end) {
-        const int r = *s++;
-        const int g = *s++;
-        const int b = *s++;
-        if (r == tr && g == tg && b == tb)
-        {
-            *d++ = 0;
-        }
-        else
-        {
-            *d++ = (b >> 3) | ((g & 0xF8) << 2) | ((r & 0xF8) << 7) | 0x8000;
-        }
-    }
-}
-
-void rgb888_to_bgra5551(uint8_t *in, uint8_t *out, int h, int v)
-{
-    uint16_t *d        = (uint16_t *)out;
-    const uint8_t *s   = in;
-    const uint8_t *end = s + h * v * 3;
-
-    while (s < end) {
-        const int r = *s++;
-        const int g = *s++;
-        const int b = *s++;
-        if (r == tr && g == tg && b == tb)
-        {
-            *d++ = 0;
-        }
-        else
-        {
-            *d++ = ((b & 0xF8) << 8) | ((g & 0xF8) << 3) | (r >> 2) | 0x0001;
-        }
-    }
-}
-
-// ¶ş½øÖÆÊı¾İ×ªCÊı×é
-void bin2array_start(FILE **fp, char *name)
-{
-    *fp = fopen(".\\img.txt", "w");
+    *fp = fopen(filename, "w");
     if(*fp == NULL)
     {
-        printf("open file \".\\img.txt\" error \n");
-        system("pause");
-        return;
+        printf("open file (%s) error \n", filename);
+        return 1;
     }
 
-    fprintf(*fp, "unsigned char %s[] = {\n", name);
+    fprintf(*fp, "unsigned char %s[] = {\n", arr_name);
+    return 0;
 }
 
-// in ÊäÈëÊı¾İÊı×é
-// in_len Êı×é³¤¶È
-// size Êı×éÔªËØ´óĞ¡
-void bin2array_convert(FILE **fp, void *in, int in_len, int size)
+// in è¾“å…¥æ•°æ®æ•°ç»„
+// in_len æ•°ç»„é•¿åº¦
+// size æ•°ç»„å…ƒç´ å¤§å°
+int32_t bin2array_convert(FILE **fp, void *in, int in_len, int size)
 {
     int i = 0;
     int rest = 0;
@@ -762,8 +181,7 @@ void bin2array_convert(FILE **fp, void *in, int in_len, int size)
     
     default:
         printf("element size(%d) is invalid\n", size);
-        return;
-        // break;
+        return 1;
     }
 
     count = 0;
@@ -787,6 +205,8 @@ void bin2array_convert(FILE **fp, void *in, int in_len, int size)
         fprintf(*fp, fmt_str2, ptr_u8[count]);
         count += 1;
     }
+
+    return 0;
 }
 
 void bin2array_end(FILE **fp)
@@ -795,67 +215,7 @@ void bin2array_end(FILE **fp)
     fclose(*fp);
 }
 
-void dbg_rgb888_dump_bmp(char *path, uint8_t *data, int32_t width, int32_t height)
-{
-    BMP_FILE_HEAD bfh;
-    BMP_INFO_HEAD bih;
-    FILE *fp;
-    uint8_t line_buf[2048 * 3];
-    int32_t line_size;
-    int32_t i, j;
-
-    if (width > 2048)
-    {
-        printf("width larger than 2048\n");
-        return;
-    }
-
-    fp = fopen(path, "wb");
-    if(fp == NULL)
-    {
-        printf("dump file %s error \n", path);
-        return;
-    }
-
-    memset(&bfh, 0, sizeof(BMP_FILE_HEAD));
-    memset(&bih, 0, sizeof(BMP_INFO_HEAD));
-    memset(line_buf, 0, sizeof(line_buf));
-
-    line_size = ((width * 3 + 3) >> 2) << 2;
-
-    bfh.bfType = 0x4D42;
-    bfh.bfSize = 54 + line_size * height;
-    bfh.bfOffBits = 54;
-
-    bih.biSize = 40;
-    bih.biWidth = width;
-    bih.biHeight = height;
-    bih.biPlanes = 1;
-    bih.biBitCount = 24;
-    bih.biCompression = 0;
-    bih.biSizeImage = line_size * height;
-    bih.biXPelsPerMeter = 4724;
-    bih.biYPelsPerMeter = 4724;
-    bih.biClrUsed = 0;
-    bih.biClrImportant = 0;
-
-    fwrite(&bfh, sizeof(BMP_FILE_HEAD), 1, fp);
-    fwrite(&bih, sizeof(BMP_INFO_HEAD), 1, fp);
-    for(i = 0; i < height; i++)
-    {
-        for (j = 0; j < width; j++)
-        {
-            line_buf[j * 3] = data[(height - i - 1) * width * 3 + j * 3 + 2];
-            line_buf[j * 3 + 1] = data[(height - i - 1) * width * 3 + j * 3 + 1];
-            line_buf[j * 3 + 2] = data[(height - i - 1) * width * 3 + j * 3];
-        }
-        fwrite(line_buf, 1, line_size, fp);
-    }
-
-    fclose(fp);
-}
-
-void dbg_rgb888_dump_ppm(char *path, uint8_t *data, int32_t width, int32_t height)
+int32_t rgb888_dump_ppm(char *path, uint8_t *data, int32_t width, int32_t height)
 {
     FILE *fp;
     char ppm_head[128];
@@ -864,16 +224,198 @@ void dbg_rgb888_dump_ppm(char *path, uint8_t *data, int32_t width, int32_t heigh
     fp = fopen(path, "wb");
     if(fp == NULL)
     {
-        printf("dump file %s error \n", path);
-        return;
+        printf("save file %s error \n", path);
+        return 1;
     }
 
     memset(ppm_head, 0, sizeof(ppm_head));
     sprintf(ppm_head, "P6 %d %d 255 ", width, height);
     ppm_head_len = strlen(ppm_head);
     fwrite(ppm_head, 1, ppm_head_len, fp);
-
     fwrite(data, 1, height * width * 3, fp);
-
     fclose(fp);
+    return 0;
+}
+
+int main(int argc, const char **argv)
+{
+    char tmp_name[512];
+    int32_t i = 0;
+    int32_t ret = 0;
+    int32_t out_size = 0;
+    int32_t out_width = 0;
+    int32_t out_height = 0;
+    uint8_t *out_data;
+    img_enc_ctx *enc_ctx = NULL;
+    img_dec_ctx *dec_ctx = NULL;
+
+    argparse_init(&argparse, options, usages, 0);
+    argparse_describe(&argparse, NULL, SPECIFICATION);
+    argparse_parse(&argparse, argc, argv);
+
+    if (input_str == NULL ||
+        strlen(input_str) > sizeof(tmp_name) - 32 ||
+        strrchr(input_str, '.') == NULL)
+    {
+        printf("input file name error(%s)\n", input_str);
+        return 1;
+    }
+
+    if (format_str == NULL ||
+        mode_str == NULL)
+    {
+        argparse_usage(&argparse);
+        return 1;
+    }
+    
+    for (i = 0; i < FMT_INVALID; i++)
+    {
+        if (strcmp(format_preset[i].fmt_str, format_str) == 0)
+        {
+            aim_fmt = &format_preset[i];
+            break;
+        }
+    }
+    if (aim_fmt == NULL)
+    {
+        printf("unknown format(%s)\n", format_str);
+        return 1;
+    }
+
+    if (strcmp(mode_str, "enc") == 0)
+    {
+        enc_ctx = img_enc_open(input_str);
+        if (enc_ctx == NULL)
+        {
+            printf("open file %s error\n", input_str);
+            return 1;
+        }
+
+        img_enc_param enc_param = {
+            .format = aim_fmt->fmt,
+            .is_big_endian = big_endian,
+            .is_invert = invert_color,
+            .use_edge_detector = edge,
+            .use_dithering_algorithm = dithering,
+            .luminance = luminance,
+            .contrast = contrast,
+            .transparence = transparence,
+        };
+        ret = img_enc_cfg(enc_ctx, &enc_param);
+        if (ret)
+        {
+            img_enc_close(enc_ctx);
+            printf("set enc param error, code %d\n", ret);
+            return 1;
+        }
+
+        ret = img_enc_get_size(enc_ctx, &out_size, &out_width, &out_height);
+        if (ret)
+        {
+            img_enc_close(enc_ctx);
+            printf("get enc size error, code %d\n", ret);
+            return 1;
+        }
+
+        out_data = (uint8_t *)malloc(out_size);
+        ret = img_enc(enc_ctx, out_data, out_size);
+        if (ret)
+        {
+            SAFE_FREE(out_data);
+            img_enc_close(enc_ctx);
+            printf("enc error, code %d\n", ret);
+            return 1;
+        }
+        img_enc_close(enc_ctx);
+
+        strcpy(tmp_name, input_str);
+        change_ext_name(tmp_name, "bin");
+        fpw = fopen(tmp_name, "wb");
+        if(fpw == NULL)
+        {
+            printf("save file %s error\n", tmp_name);
+        }
+        else
+        {
+            fwrite(out_data, 1, out_size, fpw);
+            fclose(fpw);
+            printf("enc finish, save file in %s\n", tmp_name);
+        }
+
+        change_ext_name(tmp_name, "c");
+        if (bin2array_start(&fpw, tmp_name, "img"))
+        {
+            printf("save file %s error\n", tmp_name);
+        }
+        else
+        {
+            bin2array_convert(&fpw, out_data, out_size, sizeof(unsigned char));
+            bin2array_end(&fpw);
+            printf("enc finish, save file in %s\n", tmp_name);
+        }
+
+        SAFE_FREE(out_data);
+    }
+    else if (strcmp(mode_str, "dec") == 0)
+    {
+        dec_ctx = img_dec_open(input_str);
+        if (dec_ctx == NULL)
+        {
+            printf("open file %s error\n", input_str);
+            return 1;
+        }
+
+        img_dec_param dec_param = {
+            .format = aim_fmt->fmt,
+            .width = decode_width,
+            .height = decode_height,
+            .is_big_endian = big_endian,
+            .file_offset = file_offset,
+            .img_head_size = img_head_size,
+            .img_tail_size = img_tail_size,
+        };
+        ret = img_dec_cfg(dec_ctx, &dec_param);
+        if (ret)
+        {
+            img_dec_close(dec_ctx);
+            printf("set dec param error, code %d\n", ret);
+            return 1;
+        }
+
+        int32_t dec_count = img_dec_get_num(dec_ctx);
+
+        char name_with_count[512] = {0};
+        char *separator = NULL;
+        strcpy(name_with_count, input_str);
+        separator = strrchr(name_with_count, '.');
+
+        out_size = decode_width * decode_height * 3;
+        out_data = (uint8_t *)malloc(out_size);
+        for (i = 0; i < dec_count; i++)
+        {
+            img_dec_seek(dec_ctx, SEEK_GOTO, i);
+            ret = img_dec(dec_ctx, out_data, out_size);
+            if (ret)
+            {
+                SAFE_FREE(out_data);
+                img_dec_close(dec_ctx);
+                printf("dec error, code %d\n", ret);
+                return 1;
+            }
+
+            sprintf(separator, "_%05d", i);
+            change_ext_name(name_with_count, "ppm");
+            if(rgb888_dump_ppm(name_with_count, out_data, decode_width, decode_height) == 0)
+            {
+                printf("dec finish, save file in %s\n", name_with_count);
+            }
+        }
+    }
+    else
+    {
+        printf("please set convert mode\n");
+        return 1;
+    }
+
+    return 0;
 }
