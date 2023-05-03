@@ -632,6 +632,53 @@ static void color_invert(uint8_t *in, uint8_t *out, int32_t h, int32_t v)
     return;
 }
 
+// TODO
+void dbg_rgb888_dump_pgm(char *path, uint8_t *data, int32_t width, int32_t height)
+{
+    FILE *fp;
+    char ppm_head[128];
+    int32_t ppm_head_len;
+
+    fp = fopen(path, "wb");
+    if(fp == NULL)
+    {
+        printf("dump file %s error \n", path);
+        return;
+    }
+
+    memset(ppm_head, 0, sizeof(ppm_head));
+    sprintf(ppm_head, "P5 %d %d 255 ", width, height);
+    ppm_head_len = strlen(ppm_head);
+    fwrite(ppm_head, 1, ppm_head_len, fp);
+
+    fwrite(data, 1, height * width, fp);
+
+    fclose(fp);
+}
+
+void dbg_rgb888_dump_ppm(char *path, uint8_t *data, int32_t width, int32_t height)
+{
+    FILE *fp;
+    char ppm_head[128];
+    int32_t ppm_head_len;
+
+    fp = fopen(path, "wb");
+    if(fp == NULL)
+    {
+        printf("dump file %s error \n", path);
+        return;
+    }
+
+    memset(ppm_head, 0, sizeof(ppm_head));
+    sprintf(ppm_head, "P6 %d %d 255 ", width, height);
+    ppm_head_len = strlen(ppm_head);
+    fwrite(ppm_head, 1, ppm_head_len, fp);
+
+    fwrite(data, 1, height * width * 3, fp);
+
+    fclose(fp);
+}
+
 // 每一步处理完成后调换 effect_buf_prev 和 effect_buf_next，处理完成后 effect_buf_prev 内保存最终的图像
 static img_err_code img_enc_effect(img_enc_ctx *img)
 {
@@ -956,7 +1003,9 @@ img_err_code img_enc_preview(img_enc_ctx *img, void *data, int32_t len)
         {
             // 二值化并转为rgb
             gray2binarization(ctx->effect_buf_prev.buf, ctx->effect_buf_next.buf, ctx->effect_buf_prev.width, ctx->effect_buf_prev.height);
+            dbg_rgb888_dump_pgm("./gray.pgm", ctx->effect_buf_next.buf, ctx->width, ctx->height);
             gray2rgb888(ctx->effect_buf_next.buf, data, ctx->effect_buf_prev.width, ctx->effect_buf_prev.height);
+            dbg_rgb888_dump_ppm("./gray.ppm", data, ctx->width, ctx->height);
         }
         else
         {
@@ -970,6 +1019,7 @@ img_err_code img_enc_preview(img_enc_ctx *img, void *data, int32_t len)
         if (ctx->effect_buf_prev.color == COLOR_RGB888)
         {
             memcpy(data, ctx->effect_buf_prev.buf, out_size);
+            dbg_rgb888_dump_ppm("./rgb.ppm", data, ctx->width, ctx->height);
         }
         else
         {
@@ -983,6 +1033,7 @@ img_err_code img_enc_preview(img_enc_ctx *img, void *data, int32_t len)
         if (ctx->effect_buf_prev.color == COLOR_RGB888)
         {
             memcpy(data, ctx->effect_buf_prev.buf, out_size);
+            dbg_rgb888_dump_ppm("./rgb.ppm", data, ctx->width, ctx->height);
         }
         else
         {
