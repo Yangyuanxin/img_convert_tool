@@ -1,114 +1,144 @@
-# BMP转像素图
-将标准24位色BMP图片转为LCD、OLED等屏使用的像素图，支持多种输出格式，可批量转换，方便制作bad apple、开机logo等动画
+# 简介
+本工具可以轻松将BMP图片转换为黑白位图、RGB565、ARGB565等单片机常用格式，也可将转换后的图片还原为电脑可查看的PPM格式。是你为单片机转换图片、制作动画的实用工具！  
+核心代码采用C语言编写，灵活高效，同时方便移植至单片机；图形界面采用python编写，人生苦短，我用python。  
+![](doc/enc_gui.png)  
+![](doc/dec_gui.png)  
+
+*本文中将bmp、jpg、gif、png、webp等图片格式简称为常见图片格式，将本工具所转换的bitmap、rgb565等格式简称为单片机图片格式*
+
+# 编译
+*请自行安装MinGW-w64或TDM-GCC等编译工具链*
+
+## 仅dll
+`gcc -shared .\img_common.c .\img_enc.c -o img_enc.dll`  
+`gcc -shared .\img_common.c .\img_dec.c -o img_dec.dll`  
+
+## exe+dll
+`gcc -L .\ -limg_enc -limg_dec .\argparse.c .\main.c -o img_convertor.exe`  
+
+## 独立exe
+`gcc .\img_common.c .\img_dec.c .\img_enc.c .\argparse.c .\main.c -o img_convertor.exe`  
 
 # 使用方法
 
-## 图像编码
-编码功能目前为命令行方式
-1. 编译`img_enc.exe`
-2. 使用命令行方式运行`img_enc.exe`
-3. 详细参数见下文
-   
-## 图像解码
-解码功能带有一个基于tkinter的GUI界面，方便预览和保存解码后的图像。
-导出的图像格式为ppm，可使用PS、Honeyview等软件查看
-1. 编译`img_dec.dll`
-2. 使用python 打开 img_dec_gui.pyw
+## 基本用法
+* 安装python，在官网找自己系统对应的 https://www.python.org/downloads/
+* 安装完成后如果一切顺利，那么直接双击运行 img_enc_gui.pyw 或 img_dec_gui.pyw
+* img_enc_gui 用于编码，可以将BMP图片转换为单片机图片格式（以及C数组），支持若干图像效果，支持批量转换
+* img_dec_gui 用于解码，可以将单片机图片转换为PPM格式，支持批量转换（PPM图片可使用Honeyview、Photoshop等软件查看）
+* 不想用图形界面的还有命令行，功能基本一致（不支持批量转换）
 
-# 编译命令
-## 命令行编译
-编码功能
-`gcc main.c argparse.c -o img_enc.exe -Wall -O2 -g`
-解码功能
-`gcc -shared -o img_dec.dll .\img_common.c .\img_dec.c`
-
-# 参数设置
-* -i 转换指定单个文件，不设置则批量转换 ./img/ 目录下的文件
-* -b 大端，仅对16位格式图片生效（例如RGB565等），默认不开启，即小端
-* -r 反色，仅对单色像素图生效，默认不开启
-* -l 亮度，仅对单色像素图生效，取值范围0-255，默认128
-* -t 透明色，仅对ARGB1555和BGRA5551有效，设置一种颜色为透明色，取值范围0x000000到0xFFFFFF
-* -m 单色像素图的格式
-* -f 输出格式
-
--m 参数详细说明
-| 取值  |   说明    |
-| :---: | :-------: |
-|   1   | 逐行，LSB |
-|   2   | 逐行，MSB |
-|   3   | 逐列，LSB |
-|   4   | 逐列，MSB |
-|   5   | 行列，LSB |
-|   6   | 行列，MSB |
-|   7   | 列行，LSB |
-|   8   | 列行，MSB |
-
--f 参数详细说明
-|   取值   |                        说明                         |
-| :------: | :-------------------------------------------------: |
-|  bitmap  |                 位图，即单色像素图                  |
-|   web    |                 8位216色 web-color                  |
-|  rgb565  |                         略                          |
-|  bgr565  |                         略                          |
+## 图像格式说明
+| 格式     | 说明                                                |
+| :------- | :-------------------------------------------------- |
+| bitmap   | 位图，或单色像素图                                  |
+| web      | 8位216色 web-color（颜色索引请查看 img_common.c）   |
+| rgb565   | 略                                                  |
+| bgr565   | 略                                                  |
 | argb1555 | 带透明的rgb格式，最高位为透明度，1为不透明，0为透明 |
 | bgra5551 | 带透明的rgb格式，最低位为透明度，1为不透明，0为透明 |
 
-示例：
-单色，模式1，关闭反色，亮度设置为50 `main.exe -f bitmap -m 1 -l 50`
-单色，模式3，开启反色，亮度设置为200 `main.exe -f bitmap -m 3 -i -l 200`
-rgb565 `main.exe -f rgb565`
+## 位图格式说明
+位图一共有8种格式，8种格式的区别在于像素排列顺序不同，请根据实际情况进行选择。  
+宽度或高度会向上对8取整，例如15*9像素的图片，横向需要(15 / 8) * 9 = 18字节内存，纵向需要 15 * (9 / 8) = 30 字节内存。  
 
-# 格式说明
+### 逐行LSB（RL）
+从第一行开始向右每取8个点作为一个字节，第一个点作为最低有效位  
+![](doc/rl.gif)  
 
-## 各格式内部数据排列方式（以 20*20 的图像为例）
-逐行
-Byte1    Byte2    Byte3
-Byte4    Byte5    Byte6
-Byte7    Byte8    Byte9
-...
-Byte58   Byte59   Byte60
+### 逐行MSB（RM）
+从第一行开始向右每取8个点作为一个字节，第一个点作为最高有效位  
+![](doc/rm.gif)  
 
-行列
-Byte1    Byte21    Byte41
-Byte2    Byte22    Byte42
-Byte3    Byte23    Byte43
-...
-Byte20   Byte40    Byte60
+### 逐列LSB（CL）
+从第一列开始向下每取8个点作为一个字节，第一个点作为最低有效位  
+![](doc/cl.gif)  
 
-逐列
-Byte1    Byte4    Byte7  ...  Byte58
-Byte2    Byte5    Byte8  ...  Byte59
-Byte3    Byte6    Byte9  ...  Byte60
+### 逐列MSB（CM）
+从第一列开始向下每取8个点作为一个字节，第一个点作为最高有效位  
+![](doc/cm.gif)  
 
-列行
-Byte1    Byte2    Byte3   ...  Byte20
-Byte21   Byte22   Byte23  ...  Byte40
-Byte41   Byte42   Byte43  ...  Byte60
+### 行列LSB（RCL）
+从第一行第一列开始向右取8个点作为一个字节，再从第二行第一列开始向右取8个点作为第二个字节……然后从第一行第九列开始向右取8个点作为一个字节，以此类推，第一个点作为最低有效位  
+![](doc/rcl.gif)  
 
-## 各格式下像素点与字节中比特位对应关系
-LSB 逐行、行列模式
-B7  B6  B5  B4  B3  B2  B1  B0
-x+7 x+6 x+5 x+4 x+3 x+2 x+1 x+0
+### 行列MSB（RCM）
+从第一行第一列开始向右取8个点作为一个字节，再从第二行第一列开始向右取8个点作为第二个字节……然后从第一行第九列开始向右取8个点作为一个字节，以此类推，第一个点作为最高有效位  
+![](doc/rcm.gif)  
 
-LSB 逐列、列行模式
-B7  B6  B5  B4  B3  B2  B1  B0
-y+7 y+6 y+5 y+4 y+3 y+2 y+1 y+0
+### 列行LSB（CRL）
+从第一列第一行开始向下取8个点作为一个字节，再从第二列第一行开始向下取8个点作为第二个字节……然后从第一列第九行开始向下取8个点作为一个字节，以此类推，第一个点作为最低有效位  
+![](doc/crl.gif)  
 
-MSB 逐行、行列模式
-B7  B6  B5  B4  B3  B2  B1  B0
-x+0 x+1 x+2 x+3 x+4 x+5 x+6 x+7
+### 列行MSB（CRM）
+从第一列第一行开始向下取8个点作为一个字节，再从第二列第一行开始向下取8个点作为第二个字节……然后从第一列第九行开始向下取8个点作为一个字节，以此类推，第一个点作为最高有效位  
+![](doc/crm.gif)  
 
-MSB 逐列、列行模式
-B7  B6  B5  B4  B3  B2  B1  B0
-y+0 y+1 y+2 y+3 y+4 y+5 y+6 y+7
 
-# 使用限制
-* 图片只支持24位位图（各种软件叫法不同，比如RGB888、24位真彩等）
-* 批处理图片必须放在当前目录下的 img 目录中
-* 批处理图片必须从 0000.bmp 开始命名直到结束，序号长度必须是4位，不足4位用0填充
-* 批处理图片长宽必须一致
-* 生成的bin文件在当前目录下，名为 img.bin
-* 生成的C语言数组文件在当前目录下，名为 img.txt
-* 单色像素图的长度或宽度按8对齐向上取整，多余的长或宽填充0
+## 图像效果说明
+img_enc 工具支持的图像效果如下，未说明则不支持  
+* 位图格式支持反色、边缘检测、颜色抖动、亮度、对比度  
+* WEB格式支持颜色抖动  
+* RGB565、BGR565、ARGB1555、BGRA5551支持颜色抖动、大小端  
+* ARGB1555、BGRA5551支持透明色  
 
-*命令行参数解析功能来自`https://github.com/cofyc/argparse.git`*
+常见图像效果如下
+* 原图  
+   ![](doc/test_img.bmp)  
+* 位图+边缘检测+反色  
+   ![](doc/bitmap_edge_invert.png)  
+* 位图+抖动  
+   ![](doc/bitmap_dither.png)  
+* WEB  
+   ![](doc/web.png)  
+* WEB+抖动  
+   ![](doc/web_dither.png)  
+
+
+## 更多用法
+* 安装FFmpeg
+* 在 FFmpeg 官网(https://www.ffmpeg.org/download.html)下载对应系统的 release 版本，看清楚是release版本，不要下载源码  
+* 可以将 FFmpeg 添加到PATH环境变量，方便以后使用  
+* 更详细的用法 `ffmpeg.exe -help full` 自己看，这里列举几个配合图片转换工具会用到的几个命令  
+
+### 将视频转换为一系列BMP
+`.\ffmpeg.exe -i video.mp4 -vf scale=48:32 -frames 400 %04d.bmp`  
+这里简单解释一下这些命令参数  
+`-i video.mp4` 要转换的文件名  
+`-vf scale=48:32` 视频缩放尺寸，例如屏幕是64x32，假设想要转换一个4:3的视频并在不拉伸的情况下铺满屏幕，简单计算一下缩放后的长宽就是48x32，不加这个参数就不进行缩放  
+`-frames 400` 转换前多少帧，不加这个参数就是转换全部  
+`%04d.bmp` 输出文件名，有C语言基础都看得懂  
+
+### 转换图片格式
+`ffmpeg -i input.jpg output.bmp`  
+添加 `-vf scale=W:H` 参数可进行缩放  
+
+
+# Q&A
+
+## 为什么我运行 img_enc_gui.pyw （或 img_dec_gui.pyw） 没有看到图形界面（或打开了编辑器等）？
+请使用 pythonw 运行，比如指定 pythonw.exe 为 pyw 文件的默认程序，或从命令行用 pythonw.exe 执行这 pyw 脚本  
+
+## 为什么我运行 img_enc_gui.pyw （或 img_dec_gui.pyw） 有的GUI组件看不到，或布局不正常等情况？
+windows 对高分屏的适配比较差，找到 pythonw.exe 的路径，右键->属性->兼容性->更改高DPI设置->这里面的设置改一改试试，不同电脑屏幕像素密度也不同，具体设置成什么样我也不知道  
+
+## 能添加对jpg、png等其他常见格式的支持吗？
+目前只支持打开bmp格式，保存PPM格式，未来也不打算支持其他格式的图片。  
+常见图片格式之间的转换有很多软件都可以做，交给它们来做更合适，而且比我做得更好，我没必要重复造轮子。  
+对于bmp以外的其他格式图片请使用画图、photoshop、acdsee等软件将图片转为bmp格式后再使用本工具转换为单片机格式。  
+
+## 能支持更多的图像效果吗？
+有能力的话可以自己开发，对我来说目前这几种图像效果已经够用了，暂时不打算支持更多效果。  
+当然我也不想造轮子，就算造出来也不如专业图像软件好。如有需要其他图像效果请使用ps等专业软件进行处理。  
+
+## 命令行不会用？
+https://learn.microsoft.com/zh-cn/training/modules/introduction-to-powershell/  
+https://learn.microsoft.com/zh-cn/powershell/scripting/learn/ps101/01-getting-started?view=powershell-7.3  
+微软官方 PowerShell 的使用教程，自学  
+
+## python不会用？
+https://www.runoob.com/python3/python3-tutorial.html  
+教程在这里，自学  
+
+## 可我还是不会用，能教我吗？
+请按下 Alt + F4 组合键  
